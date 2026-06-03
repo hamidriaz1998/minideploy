@@ -8,8 +8,26 @@ For all examples, assume:
 
 - Your VPS is running Ubuntu/Debian with systemd
 - You've already run `minideploy init-server --host my-vps --ssh-user root`
-- You have an API key from that output
+- You have an API key from that output (your admin key is saved to `~/.config/minideploy/config.yml`)
 - You've tested the daemon: `curl http://127.0.0.1:8443/api/v1/health`
+
+### Creating App-Scoped Keys
+
+All examples need an API key in `.deploy.yml`. Instead of copying the admin key (which has full access), create an **app-scoped key** for each project:
+
+```bash
+# After init-server, create a key limited to just this app
+minideploy create-key --scope app --app-name my-api --label "my-api deploy"
+
+# Output:
+# Key created (id=2)
+# Scope:   app
+# App:     my-api
+# Label:   my-api deploy
+# API Key: b2c3d4e5f6a7...
+```
+
+App-scoped keys can only deploy, rollback, check status, and view logs for their specific app. They cannot administer keys or destroy other apps. Use `minideploy keys` to list all keys and `minideploy delete-key <id>` to remove compromised ones.
 
 ---
 
@@ -103,8 +121,10 @@ server:
   host: my-vps
   api_port: 8443
   ssh_user: root
-  api_key: <your-api-key>
+  api_key: <your-api-key>    # use the app-scoped key from create-key
 ```
+
+> **Tip**: Use the app-scoped key you created in [Common Setup](#common-setup) here, not your admin key. This limits what the key can do if it's ever leaked.
 
 ### Step 3: Deploy
 
@@ -227,10 +247,12 @@ server:
   host: my-vps
   api_port: 8443
   ssh_user: root
-  api_key: <your-api-key>
+  api_key: <your-api-key>    # use an app-scoped key (see Common Setup)
 env:
   NODE_ENV: production
 ```
+
+> **Tip**: Run `minideploy create-key --scope app --app-name express-api --label "express deploy"` to get an app-scoped key for this project.
 
 ### Step 3: Deploy
 
@@ -321,8 +343,10 @@ server:
   host: my-vps
   api_port: 8443
   ssh_user: root
-  api_key: <your-api-key>
+  api_key: <your-api-key>    # use an app-scoped key (see Common Setup)
 ```
+
+> **Tip**: Run `minideploy create-key --scope app --app-name webapi --label "webapi deploy"` to get an app-scoped key for this project.
 
 ### Step 4: Deploy
 
