@@ -423,34 +423,47 @@ minideploy init [--force]
 |---|---|---|
 | `-f, --force` | `false` | Overwrite existing `.deploy.yml` |
 
-Prompts for all fields with sensible defaults:
+Prompts for all fields with sensible defaults across multiple screens (use arrow keys, Tab, and Enter):
 
 ```
 $ minideploy init
-minideploy init — generating .deploy.yml
-----------------------------------------
-App name [my-app]:
-Service type (systemd/pm2) [systemd]:
-Service name (use %i for instances) [my-api@%i]:
-Number of instances [1]: 2
-  Instance 1 port [3000]:
-  Instance 2 port [3001]:
-Deploy path [/opt/my-api]:
-Build steps (one per line, empty line to finish):
-  Step 1: go build -o app .
-  Step 2:
-Artifacts to upload (one per line, empty line to finish):
-  Artifact 1: app
-  Artifact 2:
-Server host: my-vps
-Server API port [8443]:
-SSH user [root]:
-API key (leave blank for env/MINIDEPLOY_API_KEY):
-Environment variables (KEY=VALUE, one per line, empty to finish):
-  Env 1: NODE_ENV=production
-  Env 2:
-----------------------------------------
-.deploy.yml generated successfully!
+┌─────────────────────────────────────────────────────────────────┐
+│ App name                                                       │
+│ Name of your application                                       │
+│                                                                │
+│ my-api________________________________________________________ │
+│                                                                │
+│ Service type                                                   │
+│ Process manager to use                                         │
+│ ◉ systemd                                                      │
+│ ○ pm2                                                          │
+│                                                                │
+│ Service name                                                   │
+│ Use %i as a placeholder for the instance ID                    │
+│                                                                │
+│ my-api@%i_____________________________________________________ │
+│                                                                │
+│ Number of instances                                            │
+│ How many service instances to run                              │
+│                                                                │
+│ 2_____________________________________________________________ │
+│                                                                │
+│ Start port                                                     │
+│ First instance port; subsequent instances increment by 1       │
+│                                                                │
+│ 3000__________________________________________________________ │
+│                                                                │
+├─────────────────────────────────────────────────────────────────┤
+│ next (tab)                                      (ctrl+c) quit  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+Use `Tab` to move between fields, `Enter` to go to the next page, and fill multi-line text fields (build steps, artifacts) with one item per line.
+
+**Example multi-line input**:
+```
+go build -o app .
+npm run build --prefix frontend
 ```
 
 ## `minideploy init-server`
