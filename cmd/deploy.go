@@ -36,7 +36,7 @@ var deployCmd = &cobra.Command{
 
 		shared.Info("starting deployment for %s", cfg.AppName)
 
-		if skipUpload || !skipBuild {
+		if !skipUpload && !skipBuild {
 			shared.Debug("running build steps: %v", cfg.Build)
 			if err := client.RunBuildSteps(cfg.Build); err != nil {
 				shared.Fatal("%v", err)
@@ -45,7 +45,7 @@ var deployCmd = &cobra.Command{
 			if err := client.VerifyArtifacts(cfg.Artifacts); err != nil {
 				shared.Fatal("%v", err)
 			}
-		} else {
+		} else if skipBuild {
 			shared.Debug("skipping build step (--skip-build)")
 		}
 
