@@ -90,13 +90,23 @@ require('lspconfig').yamlls.setup({
 
 The URL points to the `main` branch on GitHub — adjust if you're using a different branch.
 
-### 3. Deploy
+### 3. Establish an SSH tunnel
+
+The daemon only listens on `127.0.0.1:8443` (localhost) for security. To access it from your development machine, open an SSH tunnel in a separate terminal:
+
+```bash
+ssh -N -L 8443:127.0.0.1:8443 user@your-server
+```
+
+Leave this running — the tunnel forwards `localhost:8443` on your machine to the daemon on the server. Press `Ctrl+C` to close it when done.
+
+### 4. Deploy
 
 ```bash
 minideploy deploy
 ```
 
-This runs your build steps, rsyncs artifacts to `/opt/my-api/upload/`, and tells the daemon to snapshot, symlink, and restart your service.
+This runs your build steps, rsyncs artifacts to `/opt/my-api/upload/`, and tells the daemon (through the SSH tunnel) to snapshot, symlink, and restart your service.
 
 ## CLI Reference
 
