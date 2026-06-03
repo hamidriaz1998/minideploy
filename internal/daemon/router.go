@@ -1,0 +1,55 @@
+package daemon
+
+import (
+	"net/http"
+	"strings"
+)
+
+func NewRouter(state *StateManager) http.Handler {
+	h := NewHandler(state)
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/api/v1/deploy", h.HandleDeploy)
+	mux.HandleFunc("/api/v1/rollback", h.HandleRollback)
+	mux.HandleFunc("/api/v1/status", h.HandleStatus)
+	mux.HandleFunc("/api/v1/health", h.HandleHealth)
+	mux.HandleFunc("/api/v1/apps", h.HandleListApps)
+
+	mux.HandleFunc("/api/v1/apps/", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/v1/apps/")
+		switch {
+		case strings.HasSuffix(path, "/status"):
+			h.HandleAppStatus(w, r)
+		case strings.HasSuffix(path, "/releases"):
+			h.HandleAppReleases(w, r)
+		case strings.HasSuffix(path, "/logs"):
+			h.HandleAppLogs(w, r)
+		case strings.Contains(path, "/"):
+			writeError(w, http.StatusNotFound, "not found")
+		default:
+			h.HandleAppDetail(w, r)
+		}
+	})
+
+	// Public endpoints (no auth)
+	public := http.NewServeMux()
+	public.Handle("/api/v1/health", mux)
+
+	// Wrap the main mux with auth
+	authMw := authMiddleware(state)
+	protected := authMw(mux)
+
+	// Combine: public routes take priority
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/health" {
+			public.ServeHTTP(w, r)
+			return
+		}
+		protected.ServeHTTP(w, r)
+	})
+
+	handler = loggingMiddleware(handler)
+	handler = recoveryMiddleware(handler)
+
+	return handler
+}

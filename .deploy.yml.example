@@ -1,0 +1,47 @@
+app_name: my-api
+
+# Process manager: "systemd" or "pm2"
+service_type: systemd
+# Use %i as placeholder for instance ID (e.g. "my-api@%i" → "my-api@3000")
+service_name: my-api@%i
+
+# Multiple instances with different ports
+instances:
+  - id: "3000"
+    port: 3000
+    env:
+      PORT: 3000
+  - id: "3001"
+    port: 3001
+    env:
+      PORT: 3001
+
+# Base path on server where releases are stored
+deploy_path: /opt/my-api
+
+# Build steps (run sequentially, fail on first error)
+build:
+  - go build -o app .
+  - npm run build --prefix frontend
+
+# Artifacts to upload (relative to project root)
+artifacts:
+  - app
+  - frontend/build/
+
+# Server connection info
+server:
+  host: my-vps                  # hostname (reads ~/.ssh/config) or IP
+  api_port: 8443
+  ssh_user: root
+  # api_key: sk-...              # optional — read from MINIDEPLOY_API_KEY env or .env file
+
+# Global environment variables (injected into all instances)
+env:
+  NODE_ENV: production
+
+# Pre/post deploy hooks (future)
+# pre_deploy:
+#   - cmd: make migrate
+# post_deploy:
+#   - cmd: make warmup
