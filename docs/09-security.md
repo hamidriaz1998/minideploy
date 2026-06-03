@@ -27,7 +27,33 @@ init-server                          User
 The raw key is printed **once** during setup. If lost, you can:
 
 - Check daemon logs on first start: `journalctl -u minideploy | grep "Generated one-time key"`
-- Generate a new key (future feature)
+- Use the admin key stored in `~/.config/minideploy/config.yml` (set by `init-server`)
+- Create a new key with `minideploy create-key --scope global` (if you have another admin key)
+
+### Key Scoping
+
+minideploy supports a **hybrid key model**:
+
+- **Global keys** — Full admin access to all apps, all operations (deploy, destroy, key management)
+- **App-scoped keys** — Can only deploy, view status, and fetch logs for a **single app**
+
+App-scoped keys are ideal for CI/CD pipelines and per-team access. Use them in `.deploy.yml` or CI secrets instead of sharing the global admin key.
+
+### Key Management
+
+```bash
+# Create an app-scoped key for a CI/CD pipeline
+minideploy create-key --scope app --app-name my-api --label "GitHub Actions"
+
+# Create a backup admin key
+minideploy create-key --scope global --label "backup"
+
+# List all keys
+minideploy keys
+
+# Delete a compromised key
+minideploy delete-key 3
+```
 
 ### Key Rotation
 
@@ -40,6 +66,8 @@ minideploy rotate-key --revoke-old
 ```
 
 The command authenticates using your current API key, generates a new key on the daemon, and returns the raw key. By default, old keys remain valid so you can update CI/CD at your own pace. Use `--revoke-old` to immediately invalidate all previous keys.
+
+> **Note**: Only global-scoped keys can call `rotate-key`.
 
 ---
 
@@ -135,7 +163,9 @@ Best practices:
 
 1. **Never commit** the API key to git
 2. Use `.env` file (gitignored) or environment variables
-3. Use a secrets manager (e.g., `pass`, 1Password CLI, Vault) in CI/CD
+3. The **global admin key** is automatically stored in `~/.config/minideploy/config.yml` by `init-server` (file permissions: `0600`)
+4. **App-scoped keys** go into `.deploy.yml` or CI secrets — they're safer to share since they're limited to one app
+5. Use a secrets manager (e.g., `pass`, 1Password CLI, Vault) in CI/CD
 
 Example `.gitignore`:
 ```
@@ -169,5 +199,3 @@ Example CI/CD (GitHub Actions):
 - **TLS/mTLS** for daemon API (certificate-based auth instead of bearer tokens)
 - **Rate limiting** on auth endpoints
 - **Audit logging** (log all API requests with timestamps and client IPs)
-- **Key rotation command** (`minideploy rotate-key`)
-- **Per-app API keys** (instead of a single shared key)

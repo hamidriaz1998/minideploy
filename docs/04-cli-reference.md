@@ -2,6 +2,26 @@
 
 minideploy is a single binary with subcommands. Use `minideploy --help` to list all commands.
 
+| Command | Description |
+|---|---|
+| `deploy` | Build, upload, and deploy |
+| `build` | Run build steps only |
+| `upload` | Rsync artifacts only |
+| `rollback` | Rollback to a previous release |
+| `destroy` | Remove an app from the daemon |
+| `status` | Daemon health information |
+| `ps` | List apps and running instances |
+| `releases` | List releases for an app |
+| `logs` | Fetch app logs |
+| `init` | Generate `.deploy.yml` |
+| `init-server` | Bootstrap daemon on a VPS |
+| `daemon` | Start the daemon |
+| `rotate-key` | Generate a new API key |
+| `config` | Manage global config (`get`/`set`) |
+| `create-key` | Create a scoped API key |
+| `delete-key` | Delete an API key |
+| `keys` | List all API keys |
+
 ## Global Flags
 
 | Flag | Description |
@@ -263,6 +283,8 @@ minideploy rotate-key [--revoke-old] [--config path] [--host HOST] [--port PORT]
 
 By default, old keys remain valid after rotation so you can update CI/CD pipelines and team members at your own pace.
 
+> **Note**: Only global-scoped (admin) keys can rotate keys. App-scoped keys are not permitted.
+
 **Examples**:
 
 ```bash
@@ -277,6 +299,115 @@ $ minideploy rotate-key --revoke-old
 New API key: f6e5d4c3b2a1...
 Active keys: 1
 Old keys have been revoked.
+```
+
+## `minideploy config`
+
+Manage the global minideploy configuration at `~/.config/minideploy/config.yml`.
+
+### `minideploy config get <key>`
+
+Get a stored config value.
+
+```
+minideploy config get admin_key
+```
+
+### `minideploy config set <key> <value>`
+
+Set a config value.
+
+```
+minideploy config set admin_key sk-abc123...
+```
+
+**Example**:
+
+```bash
+$ minideploy config get admin_key
+sk-abc123def456...
+
+$ minideploy config set admin_key sk-newkey...
+config admin_key updated
+```
+
+## `minideploy create-key`
+
+Create a new API key with a specific scope (global or app) and optional label.
+
+```
+minideploy create-key [--scope SCOPE] [--app-name NAME] [--label LABEL]
+                      [--host HOST] [--port PORT] [--api-key KEY]
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--scope` | `app` | Key scope: `global` or `app` |
+| `-a, --app-name` | `""` | App name (required for `--scope app`) |
+| `-l, --label` | `""` | Optional human-readable label |
+| `-H, --host` | `127.0.0.1` | Daemon host |
+| `-p, --port` | `8443` | Daemon API port |
+| `-k, --api-key` | config or env | Admin API key for authentication |
+
+**Global keys** have full access to all apps and all operations (deploy, destroy, key management).
+
+**App-scoped keys** can only deploy, view status, and fetch logs for a single app. They cannot call `rotate-key`, `destroy`, `create-key`, `delete-key`, or `keys`.
+
+**Examples**:
+
+```bash
+# Create an app-scoped key for "my-api"
+$ minideploy create-key --app-name my-api --label "CI/CD deploy key"
+Key created (id=2)
+Scope:   app
+App:     my-api
+Label:   CI/CD deploy key
+API Key: b2c3d4e5f6a7...
+
+# Create a global admin key
+$ minideploy create-key --scope global --label "admin backup key"
+Key created (id=3)
+Scope:   global
+Label:   admin backup key
+API Key: c3d4e5f6a7b8...
+```
+
+## `minideploy delete-key <id>`
+
+Permanently delete an API key by its ID.
+
+```
+minideploy delete-key <id> [--host HOST] [--port PORT] [--api-key KEY]
+```
+
+Use `minideploy keys` to find key IDs.
+
+**Example**:
+
+```bash
+$ minideploy delete-key 2
+Key 2 deleted
+```
+
+## `minideploy keys`
+
+List all API keys registered with the daemon.
+
+```
+minideploy keys [--host HOST] [--port PORT] [--api-key KEY]
+```
+
+Shows the key ID, scope, associated app, label, and creation date.
+
+**Example**:
+
+```bash
+$ minideploy keys
+ID   Scope    App               Label                Created
+---- -------- ---------------- -------------------- ------------
+1    global   (all)            initial key          2026-06-03
+2    app      my-api            CI/CD deploy key    2026-06-04
+3    global   (all)             admin backup key    2026-06-04
 ```
 
 ## `minideploy init`
@@ -329,6 +460,35 @@ Bootstrap the minideploy daemon on a fresh VPS.
 minideploy init-server --host HOST [--ssh-user USER] [--app-name NAME] [--deploy-path PATH]
 ```
 
+The admin API key is automatically saved to `~/.config/minideploy/config.yml` so
+you can immediately run admin commands like `create-key` without passing `--api-key`.
+
+**Output**:
+
+```
+═══════════════════════════════════════════
+  Daemon installed!
+
+  Host:      my-vps
+  API Port:  8443
+
+  Admin API Key (saved to global config):
+  a1b2c3d4e5f6... (64 hex chars)
+
+  Add to .deploy.yml:
+  server:
+    host: my-vps
+    api_port: 8443
+    ssh_user: root
+    api_key: a1b2c3d4e5f6...
+
+  Or create app-scoped keys with:
+  minideploy create-key --scope app --app-name <name>
+═══════════════════════════════════════════
+```
+
+
+
 | Flag | Default | Description |
 |---|---|---|
 | `--host` | (required) | VPS hostname or IP |
@@ -344,4 +504,5 @@ The command:
 5. Installs a systemd service for the daemon
 6. Configures sudoers for the `minideploy` user
 7. Generates and displays an API key
-8. Starts the daemon
+8. Saves the admin key to `~/.config/minideploy/config.yml`
+9. Starts the daemon

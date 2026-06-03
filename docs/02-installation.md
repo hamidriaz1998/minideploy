@@ -49,6 +49,9 @@ This will:
 7. Generate an API key
 8. Start the daemon
 
+The admin API key is automatically saved to `~/.config/minideploy/config.yml` so you can
+run admin commands like `create-key` immediately without passing `--api-key`.
+
 Output:
 
 ```
@@ -58,7 +61,7 @@ Output:
   Host:      my-vps
   API Port:  8443
 
-  API Key:
+  Admin API Key (saved to global config):
   a1b2c3d4e5f6... (64 hex chars)
 
   Add to .deploy.yml:
@@ -67,10 +70,14 @@ Output:
     api_port: 8443
     ssh_user: root
     api_key: a1b2c3d4e5f6...
+
+  Or create app-scoped keys with:
+  minideploy create-key --scope app --app-name <name>
 ═══════════════════════════════════════════
 ```
 
 Save the API key in your `.deploy.yml`, `.env` file, or as an environment variable.
+For CI/CD pipelines, create an [app-scoped key](09-security.md#key-scoping) instead of using the admin key.
 
 ### Adding More Apps
 

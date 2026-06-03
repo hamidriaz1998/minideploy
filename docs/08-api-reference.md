@@ -12,6 +12,25 @@ Authorization: Bearer <api_key>
 
 Invalid or missing tokens return `401 Unauthorized`.
 
+### Key Scoping
+
+minideploy supports two types of API keys:
+
+- **Global keys** — Full access to all endpoints and all apps
+- **App-scoped keys** — Limited to `deploy`, `rollback`, `status`, `releases`, `logs` for a single app
+
+The following endpoints require a **global-scoped** key (app-scoped keys are rejected):
+
+| Endpoint | Reason |
+|---|---|
+| `POST /api/v1/rotate-key` | Key management |
+| `POST /api/v1/keys` | Key management |
+| `GET /api/v1/keys` | Key management |
+| `DELETE /api/v1/keys/:id` | Key management |
+| `POST /api/v1/apps/:name/destroy` | App destruction |
+
+App-scoped keys calling `GET /api/v1/apps` will see **only their own app** in the response.
+
 ## Response Format
 
 All responses use a uniform envelope:
@@ -358,22 +377,121 @@ Generate a new API key. Optionally revoke all previous keys.
 
 The raw key is returned **only in this response** and cannot be retrieved later. Save it immediately.
 
-**Status codes**: `200`, `500`
+**Requires**: Global-scoped key.
+
+**Status codes**: `200`, `403` (app-scoped key), `500`
+
+---
+
+## `POST /api/v1/keys`
+
+Create a new API key with a specific scope and optional app name and label.
+
+**Requires**: Global-scoped key.
+
+**Request**:
+
+```json
+{
+  "scope": "app",
+  "app_name": "my-api",
+  "label": "CI/CD deploy key"
+}
+```
+
+| Field | Default | Description |
+|---|---|---|
+| `scope` | `app` | `"global"` or `"app"` |
+| `app_name` | `""` | Required when `scope` is `"app"` |
+| `label` | `""` | Optional human-readable label |
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 2,
+    "raw_key": "b2c3d4e5f6a7...",
+    "scope": "app",
+    "app_name": "my-api",
+    "label": "CI/CD deploy key"
+  }
+}
+```
+
+The raw key is returned **only in this response** and cannot be retrieved later. Save it immediately.
+
+**Status codes**: `201`, `400`, `403` (app-scoped key), `500`
+
+---
+
+## `GET /api/v1/keys`
+
+List all API keys registered with the daemon.
+
+**Requires**: Global-scoped key.
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "scope": "global",
+      "app_name": "",
+      "label": "initial key",
+      "hash_hint": "$2a$10$abc...",
+      "created_at": "2026-06-03T12:00:00Z"
+    }
+  ]
+}
+```
+
+**Status codes**: `200`, `403` (app-scoped key)
+
+---
+
+## `DELETE /api/v1/keys/:id`
+
+Permanently delete an API key by its database ID.
+
+**Requires**: Global-scoped key.
+
+**Request**: No body. The key ID is in the URL path.
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "deleted": true
+  }
+}
+```
+
+**Status codes**: `200`, `404` (key not found), `403` (app-scoped key)
 
 ---
 
 ## Quick Reference
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/v1/health` | No | Liveness check |
-| `GET` | `/api/v1/status` | Yes | Daemon health |
-| `GET` | `/api/v1/apps` | Yes | List apps |
-| `GET` | `/api/v1/apps/:name` | Yes | App detail |
-| `GET` | `/api/v1/apps/:name/status` | Yes | Per-instance status |
-| `GET` | `/api/v1/apps/:name/releases` | Yes | Release history |
-| `GET` | `/api/v1/apps/:name/logs` | Yes | App logs |
-| `POST` | `/api/v1/deploy` | Yes | Trigger deploy |
-| `POST` | `/api/v1/rollback` | Yes | Rollback |
-| `POST` | `/api/v1/rotate-key` | Yes | Generate new API key |
-| `POST` | `/api/v1/apps/:name/destroy` | Yes | Remove app |
+| Method | Path | Auth | Scope | Description |
+|---|---|---|---|---|---|
+| `GET` | `/api/v1/health` | No | — | Liveness check |
+| `GET` | `/api/v1/status` | Yes | Any | Daemon health |
+| `GET` | `/api/v1/apps` | Yes | Any | List apps (filtered for app-scoped keys) |
+| `GET` | `/api/v1/apps/:name` | Yes | Any | App detail |
+| `GET` | `/api/v1/apps/:name/status` | Yes | Any | Per-instance status |
+| `GET` | `/api/v1/apps/:name/releases` | Yes | Any | Release history |
+| `GET` | `/api/v1/apps/:name/logs` | Yes | Any | App logs |
+| `POST` | `/api/v1/deploy` | Yes | Any | Trigger deploy |
+| `POST` | `/api/v1/rollback` | Yes | Any | Rollback |
+| `POST` | `/api/v1/rotate-key` | Yes | Global | Generate new API key |
+| `POST` | `/api/v1/keys` | Yes | Global | Create API key |
+| `DELETE` | `/api/v1/keys/:id` | Yes | Global | Delete API key |
+| `GET` | `/api/v1/keys` | Yes | Global | List API keys |
+| `POST` | `/api/v1/apps/:name/destroy` | Yes | Global | Remove app |
