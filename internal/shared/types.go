@@ -39,6 +39,17 @@ type APIEnvelope struct {
 	Error   string      `json:"error,omitempty"`
 }
 
+type DestroyRequest struct {
+	AppName string `json:"app_name"`
+	Soft    bool   `json:"soft"`
+	Confirm bool   `json:"confirm"`
+}
+
+type DestroyResponse struct {
+	AppName string `json:"app_name"`
+	Soft    bool   `json:"soft"`
+}
+
 type DeployRequest struct {
 	AppName     string     `json:"app_name"`
 	ReleaseName string     `json:"release_name,omitempty"`

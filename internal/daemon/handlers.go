@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -311,6 +312,81 @@ func (h *Handler) HandleAppLogs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(allLogs.String()))
+}
+
+func (h *Handler) HandleDestroy(w http.ResponseWriter, r *http.Request) {
+	appName := extractAppName(r.URL.Path, "/api/v1/apps/", "/destroy")
+
+	if appName == "" {
+		writeError(w, http.StatusBadRequest, "app name not found in path")
+		return
+	}
+
+	app, ok := h.state.GetApp(appName)
+	if !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("app %q not found", appName))
+		return
+	}
+
+	var req struct {
+		Confirm bool `json:"confirm"`
+		Soft    bool `json:"soft"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if !req.Confirm {
+		writeError(w, http.StatusBadRequest, "confirmation required: set confirm=true")
+		return
+	}
+
+	pm, err := NewProcessManager(app.ServiceType)
+	if err == nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		for _, inst := range app.Instances {
+			_ = pm.Stop(ctx, app.ServiceName, inst.ID)
+		}
+		cancel()
+	}
+
+	if !req.Soft {
+		if err := os.RemoveAll(app.DeployPath); err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("remove deploy path: %v", err))
+			return
+		}
+	}
+
+	if err := h.state.RemoveApp(appName); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("remove from state: %v", err))
+		return
+	}
+
+	mode := "hard"
+	if req.Soft {
+		mode = "soft"
+	}
+
+	writeJSON(w, http.StatusOK, shared.APIEnvelope{
+		Success: true,
+		Data: shared.DestroyResponse{
+			AppName: appName,
+			Soft:    req.Soft,
+		},
+		Error: "",
+	})
+	_ = mode
+}
+
+func extractAppName(path, prefix, suffix string) string {
+	trimmed := strings.TrimPrefix(path, prefix)
+	idx := strings.Index(trimmed, suffix)
+	if idx < 0 {
+		return ""
+	}
+	return trimmed[:idx]
 }
 
 func (h *Handler) HandleHealth(w http.ResponseWriter, r *http.Request) {

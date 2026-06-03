@@ -76,7 +76,7 @@ func (sm *StateManager) GetApp(name string) (*shared.AppState, bool) {
 func (sm *StateManager) ListApps() []shared.AppSummary {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
-	var apps []shared.AppSummary
+	apps := make([]shared.AppSummary, 0, len(sm.state.Apps))
 	for _, a := range sm.state.Apps {
 		apps = append(apps, shared.AppSummary{
 			Name:           a.Name,
@@ -167,6 +167,18 @@ func (sm *StateManager) AddAPIKey(hash string) error {
 		KeyHash:   hash,
 		CreatedAt: time.Now(),
 	})
+	return sm.save()
+}
+
+func (sm *StateManager) RemoveApp(appName string) error {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	if _, ok := sm.state.Apps[appName]; !ok {
+		return fmt.Errorf("app %q not found", appName)
+	}
+
+	delete(sm.state.Apps, appName)
 	return sm.save()
 }
 

@@ -18,6 +18,8 @@ func NewRouter(state *StateManager) http.Handler {
 	mux.HandleFunc("/api/v1/apps/", func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/api/v1/apps/")
 		switch {
+		case strings.HasSuffix(path, "/destroy"):
+			h.HandleDestroy(w, r)
 		case strings.HasSuffix(path, "/status"):
 			h.HandleAppStatus(w, r)
 		case strings.HasSuffix(path, "/releases"):

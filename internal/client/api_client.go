@@ -157,6 +157,21 @@ func (c *APIClient) AppReleases(name string) ([]shared.Release, error) {
 	return releases, nil
 }
 
+func (c *APIClient) Destroy(req shared.DestroyRequest) (*shared.DestroyResponse, error) {
+	env, err := c.do("POST", fmt.Sprintf("/apps/%s/destroy", req.AppName), req)
+	if err != nil {
+		return nil, err
+	}
+	if !env.Success {
+		return nil, fmt.Errorf("destroy failed: %s", env.Error)
+	}
+
+	data, _ := json.Marshal(env.Data)
+	var resp shared.DestroyResponse
+	json.Unmarshal(data, &resp)
+	return &resp, nil
+}
+
 func (c *APIClient) AppLogs(name string) (string, error) {
 	req, err := http.NewRequest("GET", c.BaseURL+"/apps/"+name+"/logs", nil)
 	if err != nil {
