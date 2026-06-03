@@ -50,7 +50,8 @@ var deployCmd = &cobra.Command{
 		}
 
 		if !skipUpload {
-			shared.Info("uploading artifacts to %s@%s:%s/upload/", cfg.Server.SSHUser, cfg.Server.Host, cfg.DeployPath)
+			size := client.ArtifactsTotalSize(cfg.Artifacts)
+			shared.Info("uploading %s of artifacts to %s@%s:%s/upload/", size, cfg.Server.SSHUser, cfg.Server.Host, cfg.DeployPath)
 			if err := client.RunRsync(client.RsyncConfig{
 				SSHUser:   cfg.Server.SSHUser,
 				Host:      cfg.Server.Host,

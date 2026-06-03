@@ -4,8 +4,38 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
+
+func ArtifactsTotalSize(artifacts []string) string {
+	var total int64
+	for _, a := range artifacts {
+		filepath.Walk(a, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil
+			}
+			if !info.IsDir() {
+				total += info.Size()
+			}
+			return nil
+		})
+	}
+	return humanBytes(total)
+}
+
+func humanBytes(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+}
 
 type RsyncConfig struct {
 	SSHUser   string
