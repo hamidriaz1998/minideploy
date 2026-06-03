@@ -326,6 +326,42 @@ Remove an app from the daemon. Requires `"confirm": true`.
 
 ---
 
+---
+
+## `POST /api/v1/rotate-key`
+
+Generate a new API key. Optionally revoke all previous keys.
+
+**Request**:
+
+```json
+{
+  "revoke_old": false
+}
+```
+
+| Field | Default | Description |
+|---|---|---|
+| `revoke_old` | `false` | If true, all previous keys are invalidated |
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "new_key": "a1b2c3d4e5f6...",
+    "keys_count": 2
+  }
+}
+```
+
+The raw key is returned **only in this response** and cannot be retrieved later. Save it immediately.
+
+**Status codes**: `200`, `500`
+
+---
+
 ## Quick Reference
 
 | Method | Path | Auth | Description |
@@ -339,4 +375,5 @@ Remove an app from the daemon. Requires `"confirm": true`.
 | `GET` | `/api/v1/apps/:name/logs` | Yes | App logs |
 | `POST` | `/api/v1/deploy` | Yes | Trigger deploy |
 | `POST` | `/api/v1/rollback` | Yes | Rollback |
+| `POST` | `/api/v1/rotate-key` | Yes | Generate new API key |
 | `POST` | `/api/v1/apps/:name/destroy` | Yes | Remove app |

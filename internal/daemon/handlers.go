@@ -37,7 +37,11 @@ func (h *Handler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 		req.ReleaseName = GenerateReleaseName()
 	}
 
-	app := h.state.RegisterApp(&req)
+	app, err := h.state.RegisterApp(&req)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("register app: %v", err))
+		return
+	}
 
 	if err := EnsureDeployDir(app.DeployPath); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -378,6 +382,31 @@ func (h *Handler) HandleDestroy(w http.ResponseWriter, r *http.Request) {
 		Error: "",
 	})
 	_ = mode
+}
+
+func (h *Handler) HandleRotateKey(w http.ResponseWriter, r *http.Request) {
+	var req shared.RotateKeyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	raw, hash, err := GenerateAPIKey()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("generate key: %v", err))
+		return
+	}
+
+	count, err := h.state.RotateKey(hash, req.RevokeOld)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("rotate key: %v", err))
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, shared.RotateKeyResponse{
+		NewKey:    raw,
+		KeysCount: count,
+	})
 }
 
 func extractAppName(path, prefix, suffix string) string {

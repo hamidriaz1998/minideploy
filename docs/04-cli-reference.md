@@ -245,6 +245,40 @@ The daemon:
 - Persists app state to `state.json` in the state directory
 - Requires `sudo` access for process manager commands
 
+## `minideploy rotate-key`
+
+Generate a new API key for the daemon.
+
+```
+minideploy rotate-key [--revoke-old] [--config path] [--host HOST] [--port PORT] [--api-key KEY]
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--revoke-old` | `false` | Invalidate all previous keys immediately |
+| `-c, --config` | `.deploy.yml` | Path to config file |
+| `-H, --host` | `127.0.0.1` | Daemon host |
+| `-p, --port` | `8443` | Daemon API port |
+| `-k, --api-key` | env or config | Current API key for authentication |
+
+By default, old keys remain valid after rotation so you can update CI/CD pipelines and team members at your own pace.
+
+**Examples**:
+
+```bash
+# Rotate key (old keys still work)
+$ minideploy rotate-key
+New API key: a1b2c3d4e5f6...
+Active keys: 2
+Old keys remain valid. Use --revoke-old to invalidate them.
+
+# Rotate and revoke all previous keys
+$ minideploy rotate-key --revoke-old
+New API key: f6e5d4c3b2a1...
+Active keys: 1
+Old keys have been revoked.
+```
+
 ## `minideploy init`
 
 Interactively generate a `.deploy.yml` file in the current directory.

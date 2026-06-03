@@ -39,6 +39,15 @@ type APIEnvelope struct {
 	Error   string      `json:"error,omitempty"`
 }
 
+type RotateKeyRequest struct {
+	RevokeOld bool `json:"revoke_old"`
+}
+
+type RotateKeyResponse struct {
+	NewKey    string `json:"new_key"`
+	KeysCount int    `json:"keys_count"`
+}
+
 type DestroyRequest struct {
 	AppName string `json:"app_name"`
 	Soft    bool   `json:"soft"`

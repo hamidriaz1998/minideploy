@@ -157,6 +157,21 @@ func (c *APIClient) AppReleases(name string) ([]shared.Release, error) {
 	return releases, nil
 }
 
+func (c *APIClient) RotateKey(req shared.RotateKeyRequest) (*shared.RotateKeyResponse, error) {
+	env, err := c.do("POST", "/rotate-key", req)
+	if err != nil {
+		return nil, err
+	}
+	if !env.Success {
+		return nil, fmt.Errorf("rotate key failed: %s", env.Error)
+	}
+
+	data, _ := json.Marshal(env.Data)
+	var resp shared.RotateKeyResponse
+	json.Unmarshal(data, &resp)
+	return &resp, nil
+}
+
 func (c *APIClient) Destroy(req shared.DestroyRequest) (*shared.DestroyResponse, error) {
 	env, err := c.do("POST", fmt.Sprintf("/apps/%s/destroy", req.AppName), req)
 	if err != nil {

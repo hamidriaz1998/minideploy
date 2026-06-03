@@ -17,7 +17,8 @@ This document describes the file system layout on the server, how releases are n
 └── current → releases/20260603-143022/   # Active symlink
 
 /var/lib/minideploy/              # Daemon state directory
-├── state.json                    # Persisted state
+├── minideploy.db                 # SQLite database (all state)
+├── state.json.migrated           # Previous JSON state (if migrated)
 └── daemon.log                    # Daemon logs
 ```
 
@@ -66,59 +67,39 @@ minideploy deploy --release v2.1.0
 
 Custom names are stored as-is. They must be valid directory names (no `/`, null bytes, etc.).
 
-## State File
+## SQLite Database
 
-The daemon persists state to `/var/lib/minideploy/state.json`.
+The daemon persists all state to `/var/lib/minideploy/minideploy.db` using SQLite.
 
-### Schema
+### Migration from JSON
 
-```json
-{
-  "daemon_version": "0.1.0",
-  "apps": {
-    "my-api": {
-      "name": "my-api",
-      "service_type": "systemd",
-      "service_name": "my-api@%i",
-      "deploy_path": "/opt/my-api",
-      "instances": [
-        { "id": "3000", "port": 3000, "env": { "PORT": "3000" } }
-      ],
-      "current_release": "20260603-143022",
-      "releases": [
-        {
-          "name": "20260603-143022",
-          "created_at": "2026-06-03T14:30:22Z",
-          "is_current": true
-        },
-        {
-          "name": "20260602-120000",
-          "created_at": "2026-06-02T12:00:00Z",
-          "is_current": false
-        }
-      ],
-      "created_at": "2026-06-01T10:00:00Z"
-    },
-    "express-api": { ... }
-  },
-  "api_keys": [
-    {
-      "key_hash": "$2a$10$...",
-      "created_at": "2026-06-01T10:00:00Z"
-    }
-  ]
-}
+If you're upgrading from a version that used `state.json`, the daemon automatically migrates your data on first startup:
+
+1. Detects `state.json` in the state directory
+2. Reads all apps, releases, instances, and API keys
+3. Inserts them into the SQLite database
+4. Renames `state.json` to `state.json.migrated` (backup)
+5. Continues with SQLite
+
+The migration is safe and non-destructive — your old state is preserved as `.migrated`.
+
+### Database Schema
+
+```sql
+meta         (key, value)              — daemon_version, metadata
+api_keys     (id, key_hash, created_at)
+apps         (id, name, service_type, service_name, deploy_path, created_at)
+instances    (id, app_id, instance_id, port, env_json)
+releases     (id, app_id, name, created_at, is_current)
 ```
 
 ### Write Safety
 
-State writes are atomic:
-
-1. Marshal JSON to `state.json.tmp`
-2. Write to `state.json.tmp`
-3. `os.Rename("state.json.tmp", "state.json")` — atomic on Linux
-
-If the daemon crashes during a write, the original `state.json` is preserved. On startup, if `state.json` is corrupted, the daemon starts fresh with an empty state.
+SQLite provides transactional safety with WAL (Write-Ahead Logging) mode:
+- Partial writes cannot corrupt the database
+- Concurrent reads during writes
+- Atomic transactions via `BEGIN` / `COMMIT`
+- Automatic crash recovery on next open
 
 ## rsync and the Upload Directory
 

@@ -1,12 +1,8 @@
 package daemon
 
 import (
-	"encoding/json"
+	"database/sql"
 	"fmt"
-	"os"
-	"path/filepath"
-	"sync"
-	"time"
 
 	"github.com/hamid/minideploy/internal/shared"
 )
@@ -14,178 +10,96 @@ import (
 var DefaultStateDir = "/var/lib/minideploy"
 
 type StateManager struct {
-	mu       sync.RWMutex
-	state    *shared.DaemonState
-	filePath string
+	db  *sql.DB
+	q   *dbQueries
 }
 
 func NewStateManager(stateDir string) (*StateManager, error) {
 	if stateDir == "" {
 		stateDir = DefaultStateDir
 	}
-	if err := os.MkdirAll(stateDir, 0755); err != nil {
-		return nil, fmt.Errorf("create state dir: %w", err)
+
+	db, err := openDB(stateDir)
+	if err != nil {
+		return nil, fmt.Errorf("open db: %w", err)
 	}
 
-	path := filepath.Join(stateDir, "state.json")
-	sm := &StateManager{filePath: path}
+	q := newDBQueries(db)
 
-	if data, err := os.ReadFile(path); err == nil {
-		var s shared.DaemonState
-		if err := json.Unmarshal(data, &s); err == nil {
-			sm.state = &s
-			return sm, nil
+	if err := q.SetMeta("daemon_version", Version); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("set version: %w", err)
+	}
+
+	sm := &StateManager{db: db, q: q}
+
+	if len(sm.getAPIKeys()) == 0 {
+		raw, hash, err := GenerateAPIKey()
+		if err != nil {
+			db.Close()
+			return nil, fmt.Errorf("generate initial api key: %w", err)
 		}
+		if err := sm.AddAPIKey(hash); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("store initial api key: %w", err)
+		}
+		fmt.Printf("!!! No API key configured. Generated one-time key:\n")
+		fmt.Printf("!!!   %s\n", raw)
+		fmt.Printf("!!! Set this as MINIDEPLOY_API_KEY or in .deploy.yml server.api_key\n")
 	}
 
-	sm.state = &shared.DaemonState{
-		DaemonVersion: Version,
-		Apps:          make(map[string]*shared.AppState),
-		APIKeys:       []shared.APIKeyEntry{},
-	}
-	if err := sm.save(); err != nil {
-		return nil, fmt.Errorf("init state: %w", err)
-	}
 	return sm, nil
 }
 
-func (sm *StateManager) save() error {
-	sm.state.DaemonVersion = Version
-	data, err := json.MarshalIndent(sm.state, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal state: %w", err)
-	}
-
-	tmp := sm.filePath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
-		return fmt.Errorf("write state tmp: %w", err)
-	}
-	if err := os.Rename(tmp, sm.filePath); err != nil {
-		return fmt.Errorf("rename state: %w", err)
-	}
-	return nil
+func (sm *StateManager) getAPIKeys() []shared.APIKeyEntry {
+	keys, _ := sm.q.GetAPIKeys()
+	return keys
 }
 
 func (sm *StateManager) GetApp(name string) (*shared.AppState, bool) {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	app, ok := sm.state.Apps[name]
-	return app, ok
+	app, found, err := sm.q.GetApp(name)
+	if err != nil || !found {
+		return nil, false
+	}
+	return app, true
 }
 
 func (sm *StateManager) ListApps() []shared.AppSummary {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	apps := make([]shared.AppSummary, 0, len(sm.state.Apps))
-	for _, a := range sm.state.Apps {
-		apps = append(apps, shared.AppSummary{
-			Name:           a.Name,
-			ServiceType:    a.ServiceType,
-			CurrentRelease: a.CurrentRelease,
-			InstancesCount: len(a.Instances),
-		})
+	apps, err := sm.q.ListApps()
+	if err != nil {
+		return []shared.AppSummary{}
 	}
 	return apps
 }
 
-func (sm *StateManager) RegisterApp(req *shared.DeployRequest) *shared.AppState {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	if existing, ok := sm.state.Apps[req.AppName]; ok {
-		if req.ServiceType != "" {
-			existing.ServiceType = req.ServiceType
-		}
-		if req.ServiceName != "" {
-			existing.ServiceName = req.ServiceName
-		}
-		if req.DeployPath != "" {
-			existing.DeployPath = req.DeployPath
-		}
-		if req.Instances != nil {
-			existing.Instances = req.Instances
-		}
-		return existing
-	}
-
-	app := &shared.AppState{
-		Name:        req.AppName,
-		ServiceType: req.ServiceType,
-		ServiceName: req.ServiceName,
-		DeployPath:  req.DeployPath,
-		Instances:   req.Instances,
-		Releases:    []shared.Release{},
-		CreatedAt:   time.Now(),
-	}
-	sm.state.Apps[req.AppName] = app
-	return app
+func (sm *StateManager) RegisterApp(req *shared.DeployRequest) (*shared.AppState, error) {
+	return sm.q.RegisterApp(req)
 }
 
 func (sm *StateManager) AddRelease(appName string, r shared.Release) error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	app, ok := sm.state.Apps[appName]
-	if !ok {
-		return fmt.Errorf("app %q not found", appName)
-	}
-
-	app.CurrentRelease = r.Name
-	app.Releases = append(app.Releases, r)
-	return sm.save()
+	return sm.q.AddRelease(appName, r)
 }
 
 func (sm *StateManager) SetCurrentRelease(appName, releaseName string) error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	app, ok := sm.state.Apps[appName]
-	if !ok {
-		return fmt.Errorf("app %q not found", appName)
-	}
-
-	found := false
-	for i := range app.Releases {
-		if app.Releases[i].Name == releaseName {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return fmt.Errorf("release %q not found for app %q", releaseName, appName)
-	}
-
-	app.CurrentRelease = releaseName
-	return sm.save()
-}
-
-func (sm *StateManager) AddAPIKey(hash string) error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-
-	sm.state.APIKeys = append(sm.state.APIKeys, shared.APIKeyEntry{
-		KeyHash:   hash,
-		CreatedAt: time.Now(),
-	})
-	return sm.save()
+	return sm.q.SetCurrentRelease(appName, releaseName)
 }
 
 func (sm *StateManager) RemoveApp(appName string) error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+	return sm.q.RemoveApp(appName)
+}
 
-	if _, ok := sm.state.Apps[appName]; !ok {
-		return fmt.Errorf("app %q not found", appName)
-	}
-
-	delete(sm.state.Apps, appName)
-	return sm.save()
+func (sm *StateManager) AddAPIKey(hash string) error {
+	return sm.q.AddAPIKey(hash)
 }
 
 func (sm *StateManager) GetAPIKeys() []shared.APIKeyEntry {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	keys := make([]shared.APIKeyEntry, len(sm.state.APIKeys))
-	copy(keys, sm.state.APIKeys)
-	return keys
+	return sm.getAPIKeys()
+}
+
+func (sm *StateManager) RotateKey(hash string, revokeOld bool) (int, error) {
+	return sm.q.RotateKey(hash, revokeOld)
+}
+
+func (sm *StateManager) Close() error {
+	return sm.db.Close()
 }

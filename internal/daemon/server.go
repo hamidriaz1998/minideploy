@@ -17,19 +17,6 @@ func Run(port int, stateDir string) error {
 		return fmt.Errorf("init state: %w", err)
 	}
 
-	if len(state.GetAPIKeys()) == 0 {
-		raw, hash, err := GenerateAPIKey()
-		if err != nil {
-			return fmt.Errorf("generate api key: %w", err)
-		}
-		if err := state.AddAPIKey(hash); err != nil {
-			return fmt.Errorf("store api key: %w", err)
-		}
-		log.Printf("!!! No API key configured. Generated one-time key:")
-		log.Printf("!!!   %s", raw)
-		log.Printf("!!! Set this as MINIDEPLOY_API_KEY or in .deploy.yml server.api_key")
-	}
-
 	router := NewRouter(state)
 
 	addr := fmt.Sprintf("127.0.0.1:%d", port)

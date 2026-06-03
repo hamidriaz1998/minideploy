@@ -7,7 +7,7 @@
 minideploy uses a pre-shared API key for all daemon communication (except the `/health` endpoint).
 
 1. **Generation**: `init-server` (or the daemon on first start) generates a 64-character hex string from `crypto/rand`
-2. **Storage**: The key is bcrypt-hashed and stored in `/var/lib/minideploy/state.json`
+2. **Storage**: The key is bcrypt-hashed and stored in the `api_keys` table of the SQLite database at `/var/lib/minideploy/minideploy.db`
 3. **Transmission**: The client sends it as a `Bearer` token in the `Authorization` header
 4. **Verification**: The daemon uses `bcrypt.CompareHashAndPassword` on every request
 
@@ -31,12 +31,15 @@ The raw key is printed **once** during setup. If lost, you can:
 
 ### Key Rotation
 
-To rotate the API key (future: `minideploy rotate-key`), you can manually:
+```bash
+# Generate a new key (old keys stay valid)
+minideploy rotate-key
 
-1. Generate a new key: `openssl rand -hex 32`
-2. Hash it: (requires manual bcrypt)
-3. Edit `/var/lib/minideploy/state.json` to add the new hash
-4. Remove the old hash after updating all clients
+# Generate and revoke all previous keys
+minideploy rotate-key --revoke-old
+```
+
+The command authenticates using your current API key, generates a new key on the daemon, and returns the raw key. By default, old keys remain valid so you can update CI/CD at your own pace. Use `--revoke-old` to immediately invalidate all previous keys.
 
 ---
 
@@ -156,7 +159,7 @@ Example CI/CD (GitHub Actions):
 | **API key leaked** | Rotate the key, bcrypt prevents offline cracking of the stored hash |
 | **SSH key compromised** | Attacker can rsync files and reach the daemon via SSH tunnel, but still needs the API key |
 | **Daemon process exploited** | Runs as unprivileged user with narrow sudo scope; cannot modify system units, enable services, or access root files |
-| **state.json stolen** | API keys are bcrypt-hashed; attacker cannot extract the raw key |
+| **Database stolen** | API keys are bcrypt-hashed; attacker cannot extract the raw key |
 | **Man-in-the-middle** | Daemon listens on localhost only; SSH tunnel is encrypted; no network exposure |
 
 ---

@@ -153,6 +153,10 @@ If you prefer to set things up by hand:
    sudo journalctl -u minideploy -n 20 --no-pager
    ```
 
+### State Storage
+
+State is stored in a SQLite database at `/var/lib/minideploy/minideploy.db`. If upgrading from a version that used `state.json`, the daemon automatically migrates your data to SQLite and renames the old file to `state.json.migrated`. You can safely delete the `.migrated` file once you've confirmed the migration succeeded.
+
 ## Upgrading the Daemon
 
 ```bash

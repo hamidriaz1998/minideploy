@@ -111,6 +111,7 @@ This runs your build steps, rsyncs artifacts to `/opt/my-api/upload/`, and tells
 | `ps` | List running apps and instances |
 | `releases [app]` | List releases for an app |
 | `logs [app]` | Tail app logs |
+| `rotate-key` | Generate a new API key |
 | `init` | Generate a `.deploy.yml` interactively |
 | `init-server` | Bootstrap daemon on a fresh VPS |
 | `daemon` | Start the daemon (run as systemd service) |

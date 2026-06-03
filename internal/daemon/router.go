@@ -11,6 +11,7 @@ func NewRouter(state *StateManager) http.Handler {
 
 	mux.HandleFunc("/api/v1/deploy", h.HandleDeploy)
 	mux.HandleFunc("/api/v1/rollback", h.HandleRollback)
+	mux.HandleFunc("/api/v1/rotate-key", h.HandleRotateKey)
 	mux.HandleFunc("/api/v1/status", h.HandleStatus)
 	mux.HandleFunc("/api/v1/health", h.HandleHealth)
 	mux.HandleFunc("/api/v1/apps", h.HandleListApps)
