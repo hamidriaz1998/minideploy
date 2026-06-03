@@ -158,5 +158,19 @@ func validate(cfg *Config) error {
 	if len(cfg.Artifacts) == 0 {
 		return fmt.Errorf("at least one artifact is required")
 	}
+	if cfg.HealthCheck.Endpoint != "" {
+		if cfg.HealthCheck.Timeout <= 0 {
+			return fmt.Errorf("health_check.timeout must be positive")
+		}
+		if cfg.HealthCheck.Retries <= 0 {
+			return fmt.Errorf("health_check.retries must be positive")
+		}
+		if cfg.HealthCheck.WaitBetweenInstances < 0 {
+			return fmt.Errorf("health_check.wait_between_instances cannot be negative")
+		}
+	}
+	if cfg.KeepReleases < 0 {
+		return fmt.Errorf("keep_releases cannot be negative")
+	}
 	return nil
 }

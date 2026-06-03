@@ -27,21 +27,26 @@ Use 'minideploy init --force' to overwrite an existing file.`,
 			os.Exit(1)
 		}
 
-		var (
-			appName       string
-			serviceType   = "systemd"
-			serviceName   string
-			instanceCount = "1"
-			startPort     = "3000"
-			deployPath    string
-			buildSteps    string
-			artifacts     string
-			serverHost    string
-			apiPort       = "8443"
-			sshUser       = "root"
-			apiKey        string
-			envVars       string
-		)
+	var (
+		appName             string
+		serviceType         = "systemd"
+		serviceName         string
+		instanceCount       = "1"
+		startPort           = "3000"
+		deployPath          string
+		buildSteps          string
+		artifacts           string
+		serverHost          string
+		apiPort             = "8443"
+		sshUser             = "root"
+		apiKey              string
+		envVars             string
+		keepReleases        = "5"
+		healthEndpoint      string
+		healthTimeout       = "10"
+		healthRetries       = "3"
+		healthWaitInstances = "0"
+	)
 
 		appInput := huh.NewInput().
 			Title("App name").
@@ -156,6 +161,38 @@ Use 'minideploy init --force' to overwrite an existing file.`,
 			Description("Optional. KEY=VALUE, one per line. Leave empty to skip.").
 			Value(&envVars)
 
+		keepInput := huh.NewInput().
+			Title("Keep releases").
+			Description("Number of old releases to keep (0 = keep all)").
+			Value(&keepReleases).
+			Validate(func(s string) error {
+				n, err := strconv.Atoi(s)
+				if err != nil || n < 0 {
+					return errors.New("must be a non-negative number")
+				}
+				return nil
+			})
+
+		healthEndpointInput := huh.NewInput().
+			Title("Health check endpoint").
+			Description("Optional. Path to check (e.g. /health). Leave empty to skip.").
+			Value(&healthEndpoint)
+
+		healthTimeoutInput := huh.NewInput().
+			Title("Health check timeout (s)").
+			Description("Seconds to wait per health check request").
+			Value(&healthTimeout)
+
+		healthRetriesInput := huh.NewInput().
+			Title("Health check retries").
+			Description("Number of retries per instance").
+			Value(&healthRetries)
+
+		healthWaitInput := huh.NewInput().
+			Title("Wait between instances (s)").
+			Description("Seconds to wait between checking each instance").
+			Value(&healthWaitInstances)
+
 		form := huh.NewForm(
 			huh.NewGroup(
 				appInput,
@@ -177,6 +214,13 @@ Use 'minideploy init --force' to overwrite an existing file.`,
 			),
 			huh.NewGroup(
 				envInput,
+				keepInput,
+			),
+			huh.NewGroup(
+				healthEndpointInput,
+				healthTimeoutInput,
+				healthRetriesInput,
+				healthWaitInput,
 			),
 		)
 
@@ -244,6 +288,27 @@ Use 'minideploy init --force' to overwrite an existing file.`,
 				b.WriteString(fmt.Sprintf("\nenv:\n  %s: %s\n", strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])))
 				break
 			}
+		}
+		b.WriteString("\n")
+		kr, _ := strconv.Atoi(keepReleases)
+		if kr > 0 {
+			b.WriteString(fmt.Sprintf("keep_releases: %d\n", kr))
+		}
+		if healthEndpoint != "" {
+			ht, _ := strconv.Atoi(healthTimeout)
+			if ht == 0 {
+				ht = 10
+			}
+			hrCount, _ := strconv.Atoi(healthRetries)
+			if hrCount == 0 {
+				hrCount = 3
+			}
+			hwi, _ := strconv.Atoi(healthWaitInstances)
+			b.WriteString("\nhealth_check:\n")
+			b.WriteString(fmt.Sprintf("  endpoint: %s\n", healthEndpoint))
+			b.WriteString(fmt.Sprintf("  timeout: %d\n", ht))
+			b.WriteString(fmt.Sprintf("  retries: %d\n", hrCount))
+			b.WriteString(fmt.Sprintf("  wait_between_instances: %d\n", hwi))
 		}
 		b.WriteString("\n")
 		b.WriteString("# pre_deploy:\n")

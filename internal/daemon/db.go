@@ -522,4 +522,23 @@ func (q *dbQueries) Close() error {
 	return q.db.Close()
 }
 
+func (q *dbQueries) DeleteRelease(appName, releaseName string) error {
+	tx, err := q.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var appID int64
+	if err := tx.QueryRow("SELECT id FROM apps WHERE name = ?", appName).Scan(&appID); err != nil {
+		return fmt.Errorf("app %q not found", appName)
+	}
+
+	_, err = tx.Exec("DELETE FROM releases WHERE app_id = ? AND name = ?", appID, releaseName)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 var _ = sqlite.Driver{}

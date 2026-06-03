@@ -80,6 +80,10 @@ func (sm *StateManager) AddRelease(appName string, r shared.Release) error {
 	return sm.q.AddRelease(appName, r)
 }
 
+func (sm *StateManager) DeleteRelease(appName, releaseName string) error {
+	return sm.q.DeleteRelease(appName, releaseName)
+}
+
 func (sm *StateManager) SetCurrentRelease(appName, releaseName string) error {
 	return sm.q.SetCurrentRelease(appName, releaseName)
 }

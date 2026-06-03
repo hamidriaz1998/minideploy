@@ -58,12 +58,21 @@ func (h *Handler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.KeepReleases > 0 {
+		releases := app.Releases
+		pruned, err := PruneReleases(app.DeployPath, releases, req.KeepReleases)
+		if err == nil {
+			for _, name := range pruned {
+				h.state.DeleteRelease(app.Name, name)
+			}
+		}
+	}
+
 	previous, err := UpdateSymlink(app.DeployPath, req.ReleaseName)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("symlink failed: %v", err))
 		return
 	}
-	_ = previous
 
 	pm, err := NewProcessManager(app.ServiceType)
 	if err != nil {
@@ -86,15 +95,48 @@ func (h *Handler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	release := MakeRelease(req.ReleaseName, app)
-	if err := h.state.AddRelease(app.Name, release); err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("persist state: %v", err))
-		return
+
+	var healthResults []shared.HealthResult
+	rolledBack := false
+	rolledBackTo := ""
+
+	if len(failed) == 0 && req.HealthCheck.Endpoint != "" && len(app.Instances) > 0 {
+		healthResults = CheckHealth(app.Instances, req.HealthCheck)
+		for _, hr := range healthResults {
+			if !hr.Passed {
+				rolledBack = true
+				break
+			}
+		}
+		if rolledBack {
+			if previous != "" {
+				UpdateSymlink(app.DeployPath, previous)
+				pm, _ = NewProcessManager(app.ServiceType)
+				ctx2, cancel2 := context.WithTimeout(r.Context(), 30*time.Second)
+				for _, inst := range app.Instances {
+					pm.Restart(ctx2, app.ServiceName, inst.ID)
+				}
+				cancel2()
+				rolledBackTo = previous
+				h.state.SetCurrentRelease(app.Name, previous)
+			}
+		}
+	}
+
+	if !rolledBack {
+		if err := h.state.AddRelease(app.Name, release); err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("persist state: %v", err))
+			return
+		}
 	}
 
 	resp := shared.DeployResponse{
-		Release:   req.ReleaseName,
-		Instances: restarted,
-		AppName:   app.Name,
+		Release:       req.ReleaseName,
+		Instances:     restarted,
+		AppName:       app.Name,
+		HealthResults: healthResults,
+		RolledBack:    rolledBack,
+		RolledBackTo:  rolledBackTo,
 	}
 
 	status := http.StatusOK

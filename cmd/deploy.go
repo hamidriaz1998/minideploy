@@ -85,11 +85,13 @@ var deployCmd = &cobra.Command{
 
 func doDeploy(apiClient *client.APIClient, cfg *client.Config, releaseName string) {
 	req := shared.DeployRequest{
-		AppName:     cfg.AppName,
-		ServiceType: cfg.ServiceType,
-		ServiceName: cfg.ServiceName,
-		Instances:   cfg.Instances,
-		DeployPath:  cfg.DeployPath,
+		AppName:      cfg.AppName,
+		ServiceType:  cfg.ServiceType,
+		ServiceName:  cfg.ServiceName,
+		Instances:    cfg.Instances,
+		DeployPath:   cfg.DeployPath,
+		KeepReleases: cfg.KeepReleases,
+		HealthCheck:  cfg.HealthCheck,
 	}
 	if releaseName != "" {
 		req.ReleaseName = releaseName
@@ -103,6 +105,22 @@ func doDeploy(apiClient *client.APIClient, cfg *client.Config, releaseName strin
 
 	fmt.Printf("[deploy] release %s deployed successfully\n", resp.Release)
 	fmt.Printf("[deploy] instances restarted: %v\n", resp.Instances)
+	if resp.RolledBack {
+		fmt.Printf("[deploy] WARNING: health check failed, rolled back to %s\n", resp.RolledBackTo)
+	}
+	if len(resp.HealthResults) > 0 {
+		for _, hr := range resp.HealthResults {
+			status := "✓"
+			if !hr.Passed {
+				status = "✗"
+			}
+			extra := ""
+			if hr.Error != "" {
+				extra = " (" + hr.Error + ")"
+			}
+			fmt.Printf("[deploy]   health %s port %d %s%s\n", status, hr.Port, hr.Instance, extra)
+		}
+	}
 }
 
 func init() {

@@ -3,17 +3,33 @@ package shared
 import "time"
 
 type Config struct {
-	AppName     string            `yaml:"app_name"`
-	ServiceType string            `yaml:"service_type"`
-	ServiceName string            `yaml:"service_name"`
-	Instances   []Instance        `yaml:"instances"`
-	DeployPath  string            `yaml:"deploy_path"`
-	Build       []string          `yaml:"build"`
-	Artifacts   []string          `yaml:"artifacts"`
-	Server      ServerConfig      `yaml:"server"`
-	Env         map[string]string `yaml:"env"`
-	PreDeploy   []Hook            `yaml:"pre_deploy"`
-	PostDeploy  []Hook            `yaml:"post_deploy"`
+	AppName      string            `yaml:"app_name"`
+	ServiceType  string            `yaml:"service_type"`
+	ServiceName  string            `yaml:"service_name"`
+	Instances    []Instance        `yaml:"instances"`
+	DeployPath   string            `yaml:"deploy_path"`
+	Build        []string          `yaml:"build"`
+	Artifacts    []string          `yaml:"artifacts"`
+	Server       ServerConfig      `yaml:"server"`
+	Env          map[string]string `yaml:"env"`
+	PreDeploy    []Hook            `yaml:"pre_deploy"`
+	PostDeploy   []Hook            `yaml:"post_deploy"`
+	KeepReleases int               `yaml:"keep_releases"`
+	HealthCheck  HealthCheck       `yaml:"health_check"`
+}
+
+type HealthCheck struct {
+	Endpoint             string `yaml:"endpoint" json:"endpoint"`
+	Timeout              int    `yaml:"timeout" json:"timeout"`
+	Retries              int    `yaml:"retries" json:"retries"`
+	WaitBetweenInstances int    `yaml:"wait_between_instances" json:"wait_between_instances"`
+}
+
+type HealthResult struct {
+	Instance string `json:"instance"`
+	Port     int    `json:"port"`
+	Passed   bool   `json:"passed"`
+	Error    string `json:"error,omitempty"`
 }
 
 type Instance struct {
@@ -91,18 +107,23 @@ type DestroyResponse struct {
 }
 
 type DeployRequest struct {
-	AppName     string     `json:"app_name"`
-	ReleaseName string     `json:"release_name,omitempty"`
-	ServiceType string     `json:"service_type,omitempty"`
-	ServiceName string     `json:"service_name,omitempty"`
-	Instances   []Instance `json:"instances,omitempty"`
-	DeployPath  string     `json:"deploy_path,omitempty"`
+	AppName      string      `json:"app_name"`
+	ReleaseName  string      `json:"release_name,omitempty"`
+	ServiceType  string      `json:"service_type,omitempty"`
+	ServiceName  string      `json:"service_name,omitempty"`
+	Instances    []Instance  `json:"instances,omitempty"`
+	DeployPath   string      `json:"deploy_path,omitempty"`
+	KeepReleases int         `json:"keep_releases"`
+	HealthCheck  HealthCheck `json:"health_check,omitempty"`
 }
 
 type DeployResponse struct {
-	Release    string   `json:"release"`
-	Instances  []string `json:"instances"`
-	AppName    string   `json:"app_name"`
+	Release       string         `json:"release"`
+	Instances     []string       `json:"instances"`
+	AppName       string         `json:"app_name"`
+	HealthResults []HealthResult `json:"health_results,omitempty"`
+	RolledBack    bool           `json:"rolled_back,omitempty"`
+	RolledBackTo  string         `json:"rolled_back_to,omitempty"`
 }
 
 type RollbackRequest struct {

@@ -239,15 +239,24 @@ Trigger a deploy. Copies `upload/` → a new release, swaps the symlink, and res
   "instances": [
     { "id": "3000", "port": 3000, "env": { "PORT": "3000" } }
   ],
-  "deploy_path": "/opt/my-api"
+  "deploy_path": "/opt/my-api",
+  "keep_releases": 5,
+  "health_check": {
+    "endpoint": "/health",
+    "timeout": 10,
+    "retries": 3,
+    "wait_between_instances": 1
+  }
 }
 ```
 
 All fields except `app_name` are optional:
 - If omitted, `service_type`, `service_name`, `instances`, `deploy_path` use the previously stored values for this app
 - If `release_name` is omitted, it's auto-generated as `YYYYMMDD-HHMMSS`
+- `keep_releases` controls pruning of old releases (0 = keep all)
+- If `health_check` is configured and all instances restart successfully, the daemon will HTTP GET each instance at `http://localhost:<port><endpoint>` with the configured retries. If any instance fails its health check, the deploy is **automatically rolled back** to the previous release.
 
-**Response**:
+**Response** (success, no health check):
 
 ```json
 {
@@ -256,6 +265,44 @@ All fields except `app_name` are optional:
     "release": "20260603-143022",
     "instances": ["my-api@3000", "my-api@3001"],
     "app_name": "my-api"
+  },
+  "error": null
+}
+```
+
+**Response** (successful deploy with health checks):
+
+```json
+{
+  "success": true,
+  "data": {
+    "release": "20260603-143022",
+    "instances": ["my-api@3000", "my-api@3001"],
+    "app_name": "my-api",
+    "health_results": [
+      { "instance": "3000", "port": 3000, "passed": true },
+      { "instance": "3001", "port": 3001, "passed": true }
+    ]
+  },
+  "error": null
+}
+```
+
+**Response** (health check failed, auto-rolled back):
+
+```json
+{
+  "success": true,
+  "data": {
+    "release": "20260603-143022",
+    "instances": ["my-api@3000", "my-api@3001"],
+    "app_name": "my-api",
+    "health_results": [
+      { "instance": "3000", "port": 3000, "passed": true },
+      { "instance": "3001", "port": 3001, "passed": false, "error": "status 503" }
+    ],
+    "rolled_back": true,
+    "rolled_back_to": "20260602-120000"
   },
   "error": null
 }

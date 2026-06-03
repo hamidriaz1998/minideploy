@@ -3,8 +3,10 @@ package daemon
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/hamid/minideploy/internal/shared"
@@ -173,4 +175,59 @@ func MakeRelease(releaseName string, app *shared.AppState) shared.Release {
 		CreatedAt: time.Now(),
 		IsCurrent: true,
 	}
+}
+
+func CheckHealth(instances []shared.Instance, hc shared.HealthCheck) []shared.HealthResult {
+	results := make([]shared.HealthResult, 0, len(instances))
+	client := &http.Client{Timeout: time.Duration(hc.Timeout) * time.Second}
+
+	for _, inst := range instances {
+		result := shared.HealthResult{Instance: inst.ID, Port: inst.Port}
+		url := fmt.Sprintf("http://localhost:%d%s", inst.Port, hc.Endpoint)
+
+		for attempt := 0; attempt < hc.Retries; attempt++ {
+			resp, err := client.Get(url)
+			if err == nil {
+				resp.Body.Close()
+				if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+					result.Passed = true
+					break
+				}
+				result.Error = fmt.Sprintf("status %d", resp.StatusCode)
+			} else {
+				result.Error = err.Error()
+			}
+			if attempt < hc.Retries-1 {
+				time.Sleep(2 * time.Second)
+			}
+		}
+
+		results = append(results, result)
+		if hc.WaitBetweenInstances > 0 {
+			time.Sleep(time.Duration(hc.WaitBetweenInstances) * time.Second)
+		}
+	}
+	return results
+}
+
+func PruneReleases(deployPath string, releases []shared.Release, keep int) ([]string, error) {
+	if keep <= 0 || len(releases) <= keep {
+		return nil, nil
+	}
+
+	sorted := make([]shared.Release, len(releases))
+	copy(sorted, releases)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].CreatedAt.Before(sorted[j].CreatedAt)
+	})
+
+	var pruned []string
+	toRemove := len(sorted) - keep
+	for i := 0; i < toRemove; i++ {
+		name := sorted[i].Name
+		releaseDir := filepath.Join(deployPath, "releases", name)
+		os.RemoveAll(releaseDir)
+		pruned = append(pruned, name)
+	}
+	return pruned, nil
 }

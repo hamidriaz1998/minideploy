@@ -76,6 +76,19 @@ env:
   NODE_ENV: production
   LOG_LEVEL: info
 
+# Number of old releases to keep on disk (0 = keep all).
+# Oldest releases are pruned after a successful deploy.
+keep_releases: 5
+
+# Health check configuration for zero-downtime verification.
+# If the endpoint doesn't respond 2xx/3xx within retries,
+# the deploy is automatically rolled back to the previous release.
+health_check:
+  endpoint: /health       # HTTP path to check on each instance
+  timeout: 10             # Seconds per request
+  retries: 3              # Retries per instance before marking failed
+  wait_between_instances: 1  # Seconds between checking instances
+
 # Pre-deploy hooks run on the server AFTER the symlink swap
 # but BEFORE the service restart. (Future feature — reserved)
 # pre_deploy:
@@ -180,6 +193,11 @@ The config loader enforces these rules:
 | `server.api_port` | Defaults to `8443` |
 | `build` | At least one step required |
 | `artifacts` | At least one artifact required |
+| `keep_releases` | Non-negative integer; `0` = keep all |
+| `health_check.endpoint` | Optional; if set, `timeout`, `retries`, and `wait_between_instances` must be valid |
+| `health_check.timeout` | Must be positive if health_check is configured |
+| `health_check.retries` | Must be positive if health_check is configured |
+| `health_check.wait_between_instances` | Cannot be negative |
 
 ## IDE Integration (JSON Schema)
 
