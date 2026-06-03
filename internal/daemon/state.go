@@ -39,7 +39,7 @@ func NewStateManager(stateDir string) (*StateManager, error) {
 			db.Close()
 			return nil, fmt.Errorf("generate initial api key: %w", err)
 		}
-		if err := sm.AddAPIKey(hash); err != nil {
+		if err := sm.AddAPIKey(hash, "global", "", "initial key"); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("store initial api key: %w", err)
 		}
@@ -88,8 +88,25 @@ func (sm *StateManager) RemoveApp(appName string) error {
 	return sm.q.RemoveApp(appName)
 }
 
-func (sm *StateManager) AddAPIKey(hash string) error {
-	return sm.q.AddAPIKey(hash)
+func (sm *StateManager) AddAPIKey(hash, scope, appName, label string) error {
+	return sm.q.AddAPIKey(hash, scope, appName, label)
+}
+
+func (sm *StateManager) DeleteAPIKey(id int) error {
+	return sm.q.DeleteAPIKey(id)
+}
+
+func (sm *StateManager) GetKeyByID(id int) (*shared.APIKeyEntry, error) {
+	keys, err := sm.q.GetAPIKeys()
+	if err != nil {
+		return nil, err
+	}
+	for _, k := range keys {
+		if k.ID == id {
+			return &k, nil
+		}
+	}
+	return nil, fmt.Errorf("key id %d not found", id)
 }
 
 func (sm *StateManager) GetAPIKeys() []shared.APIKeyEntry {

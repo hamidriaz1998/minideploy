@@ -187,6 +187,51 @@ func (c *APIClient) Destroy(req shared.DestroyRequest) (*shared.DestroyResponse,
 	return &resp, nil
 }
 
+func (c *APIClient) CreateKey(req shared.CreateKeyRequest) (*shared.CreateKeyResponse, error) {
+	env, err := c.do("POST", "/keys", req)
+	if err != nil {
+		return nil, err
+	}
+	if !env.Success {
+		return nil, fmt.Errorf("create key failed: %s", env.Error)
+	}
+
+	data, _ := json.Marshal(env.Data)
+	var resp shared.CreateKeyResponse
+	json.Unmarshal(data, &resp)
+	return &resp, nil
+}
+
+func (c *APIClient) DeleteKey(id int) (*shared.DeleteKeyResponse, error) {
+	env, err := c.do("DELETE", fmt.Sprintf("/keys/%d", id), nil)
+	if err != nil {
+		return nil, err
+	}
+	if !env.Success {
+		return nil, fmt.Errorf("delete key failed: %s", env.Error)
+	}
+
+	data, _ := json.Marshal(env.Data)
+	var resp shared.DeleteKeyResponse
+	json.Unmarshal(data, &resp)
+	return &resp, nil
+}
+
+func (c *APIClient) ListKeys() ([]shared.KeyInfo, error) {
+	env, err := c.do("GET", "/keys", nil)
+	if err != nil {
+		return nil, err
+	}
+	if !env.Success {
+		return nil, fmt.Errorf("list keys failed: %s", env.Error)
+	}
+
+	data, _ := json.Marshal(env.Data)
+	var keys []shared.KeyInfo
+	json.Unmarshal(data, &keys)
+	return keys, nil
+}
+
 func (c *APIClient) AppLogs(name string) (string, error) {
 	req, err := http.NewRequest("GET", c.BaseURL+"/apps/"+name+"/logs", nil)
 	if err != nil {

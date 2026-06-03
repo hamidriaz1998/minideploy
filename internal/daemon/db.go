@@ -52,6 +52,9 @@ func migrateSchema(db *sql.DB) error {
 	CREATE TABLE IF NOT EXISTS api_keys (
 		id         INTEGER PRIMARY KEY AUTOINCREMENT,
 		key_hash   TEXT NOT NULL,
+		scope      TEXT NOT NULL DEFAULT 'global',
+		app_name   TEXT DEFAULT NULL,
+		label      TEXT DEFAULT '',
 		created_at TEXT NOT NULL DEFAULT (datetime('now'))
 	);
 
@@ -80,8 +83,21 @@ func migrateSchema(db *sql.DB) error {
 		is_current  INTEGER NOT NULL DEFAULT 0
 	);
 	`
-	_, err := db.Exec(schema)
-	return err
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+
+	_, err := db.Exec("ALTER TABLE api_keys ADD COLUMN scope TEXT NOT NULL DEFAULT 'global'")
+	if err != nil {
+		// column already exists — ignore
+	}
+	_, err = db.Exec("ALTER TABLE api_keys ADD COLUMN app_name TEXT DEFAULT NULL")
+	if err != nil {
+	}
+	_, err = db.Exec("ALTER TABLE api_keys ADD COLUMN label TEXT DEFAULT ''")
+	if err != nil {
+	}
+	return nil
 }
 
 func migrateFromJSON(stateDir string, db *sql.DB) error {
@@ -111,7 +127,14 @@ func migrateFromJSON(stateDir string, db *sql.DB) error {
 	}
 
 	for _, k := range old.APIKeys {
-		if _, err := tx.Exec("INSERT INTO api_keys (key_hash, created_at) VALUES (?, ?)", k.KeyHash, k.CreatedAt.Format(time.RFC3339)); err != nil {
+		scope := k.Scope
+		if scope == "" {
+			scope = "global"
+		}
+		if _, err := tx.Exec(
+			"INSERT INTO api_keys (key_hash, scope, app_name, label, created_at) VALUES (?, ?, ?, ?, ?)",
+			k.KeyHash, scope, k.AppName, k.Label, k.CreatedAt.Format(time.RFC3339),
+		); err != nil {
 			return err
 		}
 	}
@@ -422,7 +445,7 @@ func (q *dbQueries) RemoveApp(appName string) error {
 }
 
 func (q *dbQueries) GetAPIKeys() ([]shared.APIKeyEntry, error) {
-	rows, err := q.db.Query("SELECT key_hash, created_at FROM api_keys ORDER BY id")
+	rows, err := q.db.Query("SELECT id, key_hash, scope, COALESCE(app_name,''), COALESCE(label,''), created_at FROM api_keys ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -432,7 +455,7 @@ func (q *dbQueries) GetAPIKeys() ([]shared.APIKeyEntry, error) {
 	for rows.Next() {
 		var k shared.APIKeyEntry
 		var created string
-		if err := rows.Scan(&k.KeyHash, &created); err != nil {
+		if err := rows.Scan(&k.ID, &k.KeyHash, &k.Scope, &k.AppName, &k.Label, &created); err != nil {
 			return nil, err
 		}
 		k.CreatedAt, _ = time.Parse(time.RFC3339, created)
@@ -441,9 +464,25 @@ func (q *dbQueries) GetAPIKeys() ([]shared.APIKeyEntry, error) {
 	return keys, nil
 }
 
-func (q *dbQueries) AddAPIKey(hash string) error {
-	_, err := q.db.Exec("INSERT INTO api_keys (key_hash, created_at) VALUES (?, ?)", hash, time.Now().Format(time.RFC3339))
+func (q *dbQueries) AddAPIKey(hash, scope, appName, label string) error {
+	created := time.Now().Format(time.RFC3339)
+	_, err := q.db.Exec(
+		"INSERT INTO api_keys (key_hash, scope, app_name, label, created_at) VALUES (?, ?, ?, ?, ?)",
+		hash, scope, appName, label, created,
+	)
 	return err
+}
+
+func (q *dbQueries) DeleteAPIKey(id int) error {
+	res, err := q.db.Exec("DELETE FROM api_keys WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("key id %d not found", id)
+	}
+	return nil
 }
 
 func (q *dbQueries) RotateKey(hash string, revokeOld bool) (int, error) {
@@ -453,7 +492,10 @@ func (q *dbQueries) RotateKey(hash string, revokeOld bool) (int, error) {
 	}
 	defer tx.Rollback()
 
-	_, err = tx.Exec("INSERT INTO api_keys (key_hash, created_at) VALUES (?, ?)", hash, time.Now().Format(time.RFC3339))
+	_, err = tx.Exec(
+		"INSERT INTO api_keys (key_hash, scope, label, created_at) VALUES (?, 'global', 'rotated', ?)",
+		hash, time.Now().Format(time.RFC3339),
+	)
 	if err != nil {
 		return 0, err
 	}

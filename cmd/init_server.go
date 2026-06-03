@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/hamid/minideploy/internal/client"
 	"github.com/hamid/minideploy/internal/daemon"
 )
 
@@ -167,6 +168,14 @@ minideploy ALL=(root) NOPASSWD: /usr/sbin/useradd *
 			}
 		}
 
+		fmt.Println("[init] saving admin key to global config...")
+		globalCfg := &client.GlobalConfig{AdminKey: rawKey}
+		if err := client.SaveGlobalConfig(globalCfg); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not save admin key to config: %v\n", err)
+		} else {
+			fmt.Println("[init] admin key saved to ~/.config/minideploy/config.yml")
+		}
+
 		fmt.Println()
 		fmt.Println("═══════════════════════════════════════════")
 		fmt.Println("  Daemon installed!")
@@ -174,7 +183,7 @@ minideploy ALL=(root) NOPASSWD: /usr/sbin/useradd *
 		fmt.Printf("  Host:      %s\n", host)
 		fmt.Printf("  API Port:  8443\n")
 		fmt.Println()
-		fmt.Println("  API Key:")
+		fmt.Println("  Admin API Key (saved to global config):")
 		fmt.Printf("  %s\n", rawKey)
 		fmt.Println()
 		fmt.Println("  Add to .deploy.yml:")
@@ -183,6 +192,9 @@ minideploy ALL=(root) NOPASSWD: /usr/sbin/useradd *
 		fmt.Printf("    api_port: 8443\n")
 		fmt.Printf("    ssh_user: %s\n", sshUser)
 		fmt.Printf("    api_key: %s\n", rawKey)
+		fmt.Println()
+		fmt.Println("  Or create app-scoped keys with:")
+		fmt.Println("  minideploy create-key --scope app --app-name <name>")
 		fmt.Println("═══════════════════════════════════════════")
 	},
 }

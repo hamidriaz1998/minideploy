@@ -33,6 +33,11 @@ func (h *Handler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !authorizeApp(r, req.AppName) {
+		writeError(w, http.StatusForbidden, "this key is not authorized for this app")
+		return
+	}
+
 	if req.ReleaseName == "" {
 		req.ReleaseName = GenerateReleaseName()
 	}
@@ -118,6 +123,11 @@ func (h *Handler) HandleRollback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !authorizeApp(r, req.AppName) {
+		writeError(w, http.StatusForbidden, "this key is not authorized for this app")
+		return
+	}
+
 	app, ok := h.state.GetApp(req.AppName)
 	if !ok {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("app %q not found", req.AppName))
@@ -193,12 +203,28 @@ func (h *Handler) HandleStatus(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) HandleListApps(w http.ResponseWriter, r *http.Request) {
 	apps := h.state.ListApps()
+	if !isGlobalKey(r) {
+		appName := getKeyAppName(r)
+		filtered := make([]shared.AppSummary, 0)
+		for _, a := range apps {
+			if a.Name == appName {
+				filtered = append(filtered, a)
+			}
+		}
+		writeSuccess(w, http.StatusOK, filtered)
+		return
+	}
 	writeSuccess(w, http.StatusOK, apps)
 }
 
 func (h *Handler) HandleAppDetail(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(r.URL.Path, "/api/v1/apps/")
 	name = strings.SplitN(name, "/", 2)[0]
+
+	if !authorizeApp(r, name) {
+		writeError(w, http.StatusForbidden, "this key is not authorized for this app")
+		return
+	}
 
 	app, ok := h.state.GetApp(name)
 	if !ok {
@@ -225,6 +251,11 @@ func (h *Handler) HandleAppStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	appName := parts[0]
+
+	if !authorizeApp(r, appName) {
+		writeError(w, http.StatusForbidden, "this key is not authorized for this app")
+		return
+	}
 
 	app, ok := h.state.GetApp(appName)
 	if !ok {
@@ -265,6 +296,11 @@ func (h *Handler) HandleAppReleases(w http.ResponseWriter, r *http.Request) {
 	}
 	appName := parts[0]
 
+	if !authorizeApp(r, appName) {
+		writeError(w, http.StatusForbidden, "this key is not authorized for this app")
+		return
+	}
+
 	app, ok := h.state.GetApp(appName)
 	if !ok {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("app %q not found", appName))
@@ -287,6 +323,11 @@ func (h *Handler) HandleAppLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	appName := parts[0]
+
+	if !authorizeApp(r, appName) {
+		writeError(w, http.StatusForbidden, "this key is not authorized for this app")
+		return
+	}
 
 	app, ok := h.state.GetApp(appName)
 	if !ok {
@@ -323,6 +364,11 @@ func (h *Handler) HandleDestroy(w http.ResponseWriter, r *http.Request) {
 
 	if appName == "" {
 		writeError(w, http.StatusBadRequest, "app name not found in path")
+		return
+	}
+
+	if !isGlobalKey(r) {
+		writeError(w, http.StatusForbidden, "only global keys can destroy apps")
 		return
 	}
 
@@ -385,6 +431,11 @@ func (h *Handler) HandleDestroy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleRotateKey(w http.ResponseWriter, r *http.Request) {
+	if !isGlobalKey(r) {
+		writeError(w, http.StatusForbidden, "only global keys can rotate keys")
+		return
+	}
+
 	var req shared.RotateKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -407,6 +458,113 @@ func (h *Handler) HandleRotateKey(w http.ResponseWriter, r *http.Request) {
 		NewKey:    raw,
 		KeysCount: count,
 	})
+}
+
+func (h *Handler) HandleCreateKey(w http.ResponseWriter, r *http.Request) {
+	if !isGlobalKey(r) {
+		writeError(w, http.StatusForbidden, "only global keys can create new keys")
+		return
+	}
+
+	var req shared.CreateKeyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Scope == "" {
+		req.Scope = "app"
+	}
+	if req.Scope != "global" && req.Scope != "app" {
+		writeError(w, http.StatusBadRequest, "scope must be 'global' or 'app'")
+		return
+	}
+	if req.Scope == "app" && req.AppName == "" {
+		writeError(w, http.StatusBadRequest, "app_name is required for app-scoped keys")
+		return
+	}
+
+	raw, hash, err := GenerateAPIKey()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("generate key: %v", err))
+		return
+	}
+
+	if err := h.state.AddAPIKey(hash, req.Scope, req.AppName, req.Label); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("store key: %v", err))
+		return
+	}
+
+	keys := h.state.GetAPIKeys()
+	var newKey *shared.APIKeyEntry
+	for i := range keys {
+		if keys[i].KeyHash == hash {
+			newKey = &keys[i]
+			break
+		}
+	}
+
+	resp := shared.CreateKeyResponse{
+		RawKey:  raw,
+		Scope:   req.Scope,
+		AppName: req.AppName,
+		Label:   req.Label,
+	}
+	if newKey != nil {
+		resp.ID = newKey.ID
+	}
+
+	writeSuccess(w, http.StatusCreated, resp)
+}
+
+func (h *Handler) HandleDeleteKey(w http.ResponseWriter, r *http.Request) {
+	if !isGlobalKey(r) {
+		writeError(w, http.StatusForbidden, "only global keys can delete keys")
+		return
+	}
+
+	var req shared.DeleteKeyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.ID <= 0 {
+		writeError(w, http.StatusBadRequest, "valid key id is required")
+		return
+	}
+
+	if err := h.state.DeleteAPIKey(req.ID); err != nil {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("delete key: %v", err))
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, shared.DeleteKeyResponse{Deleted: true})
+}
+
+func (h *Handler) HandleListKeys(w http.ResponseWriter, r *http.Request) {
+	if !isGlobalKey(r) {
+		writeError(w, http.StatusForbidden, "only global keys can list keys")
+		return
+	}
+
+	keys := h.state.GetAPIKeys()
+	infos := make([]shared.KeyInfo, len(keys))
+	for i, k := range keys {
+		hint := ""
+		if len(k.KeyHash) > 12 {
+			hint = k.KeyHash[:12] + "..."
+		}
+		infos[i] = shared.KeyInfo{
+			ID:        k.ID,
+			Scope:     k.Scope,
+			AppName:   k.AppName,
+			Label:     k.Label,
+			HashHint:  hint,
+			CreatedAt: k.CreatedAt,
+		}
+	}
+	writeSuccess(w, http.StatusOK, infos)
 }
 
 func extractAppName(path, prefix, suffix string) string {

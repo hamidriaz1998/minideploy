@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -32,6 +33,34 @@ func NewRouter(state *StateManager) http.Handler {
 		default:
 			h.HandleAppDetail(w, r)
 		}
+	})
+
+	mux.HandleFunc("/api/v1/keys", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleListKeys(w, r)
+		case http.MethodPost:
+			h.HandleCreateKey(w, r)
+		default:
+			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+	})
+
+	mux.HandleFunc("/api/v1/keys/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		idStr := strings.TrimPrefix(r.URL.Path, "/api/v1/keys/")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid key id")
+			return
+		}
+		r.Body = http.NoBody
+		req := struct{ ID int }{ID: id}
+		h.HandleDeleteKey(w, r)
+		_ = req
 	})
 
 	// Public endpoints (no auth)

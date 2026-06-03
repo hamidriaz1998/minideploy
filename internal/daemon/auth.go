@@ -27,11 +27,4 @@ func GenerateAPIKey() (string, string, error) {
 	return raw, string(hash), nil
 }
 
-func ValidateAPIKey(provided string, storedHashes []string) bool {
-	for _, hash := range storedHashes {
-		if bcrypt.CompareHashAndPassword([]byte(hash), []byte(provided)) == nil {
-			return true
-		}
-	}
-	return false
-}
+

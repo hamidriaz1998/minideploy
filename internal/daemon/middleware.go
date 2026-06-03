@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -8,7 +9,16 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/hamid/minideploy/internal/shared"
+)
+
+type contextKey string
+
+const (
+	contextKeyScope   contextKey = "scope"
+	contextKeyAppName contextKey = "app_name"
 )
 
 func recoveryMiddleware(next http.Handler) http.Handler {
@@ -62,22 +72,51 @@ func authMiddleware(state *StateManager) func(http.Handler) http.Handler {
 			}
 
 			keys := state.GetAPIKeys()
-			if !ValidateAPIKey(token, extractHashes(keys)) {
+			entry, ok := findKeyByToken(token, keys)
+			if !ok {
 				writeError(w, http.StatusUnauthorized, "invalid api key")
 				return
 			}
 
-			next.ServeHTTP(w, r)
+			ctx := context.WithValue(r.Context(), contextKeyScope, entry.Scope)
+			ctx = context.WithValue(ctx, contextKeyAppName, entry.AppName)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-func extractHashes(keys []shared.APIKeyEntry) []string {
-	hashes := make([]string, len(keys))
-	for i, k := range keys {
-		hashes[i] = k.KeyHash
+func findKeyByToken(token string, keys []shared.APIKeyEntry) (*shared.APIKeyEntry, bool) {
+	for _, k := range keys {
+		if validateBcrypt(token, k.KeyHash) {
+			return &k, true
+		}
 	}
-	return hashes
+	return nil, false
+}
+
+func validateBcrypt(provided, hash string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(provided)) == nil
+}
+
+func getScope(r *http.Request) string {
+	s, _ := r.Context().Value(contextKeyScope).(string)
+	return s
+}
+
+func getKeyAppName(r *http.Request) string {
+	a, _ := r.Context().Value(contextKeyAppName).(string)
+	return a
+}
+
+func isGlobalKey(r *http.Request) bool {
+	return getScope(r) == "global"
+}
+
+func authorizeApp(r *http.Request, appName string) bool {
+	if isGlobalKey(r) {
+		return true
+	}
+	return getKeyAppName(r) == appName
 }
 
 func writeJSON(w http.ResponseWriter, status int, env shared.APIEnvelope) {

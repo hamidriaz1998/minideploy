@@ -13,6 +13,57 @@ import (
 
 type Config = shared.Config
 
+type GlobalConfig struct {
+	AdminKey string `yaml:"admin_key"`
+}
+
+func GlobalConfigPath() string {
+	return filepath.Join(ConfigDir(), "config.yml")
+}
+
+func LoadGlobalConfig() (*GlobalConfig, error) {
+	path := GlobalConfigPath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &GlobalConfig{}, nil
+		}
+		return nil, fmt.Errorf("read global config: %w", err)
+	}
+
+	var cfg GlobalConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse global config: %w", err)
+	}
+	return &cfg, nil
+}
+
+func SaveGlobalConfig(cfg *GlobalConfig) error {
+	dir := ConfigDir()
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("create config dir: %w", err)
+	}
+
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshal global config: %w", err)
+	}
+
+	path := filepath.Join(dir, "config.yml")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return fmt.Errorf("write global config: %w", err)
+	}
+	return nil
+}
+
+func GetAdminKey() string {
+	cfg, err := LoadGlobalConfig()
+	if err != nil || cfg.AdminKey == "" {
+		return os.Getenv("MINIDEPLOY_ADMIN_KEY")
+	}
+	return cfg.AdminKey
+}
+
 func LoadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

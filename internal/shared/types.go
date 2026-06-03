@@ -39,6 +39,37 @@ type APIEnvelope struct {
 	Error   string      `json:"error,omitempty"`
 }
 
+type CreateKeyRequest struct {
+	Scope   string `json:"scope"`
+	AppName string `json:"app_name,omitempty"`
+	Label   string `json:"label,omitempty"`
+}
+
+type CreateKeyResponse struct {
+	ID      int    `json:"id"`
+	RawKey  string `json:"raw_key"`
+	Scope   string `json:"scope"`
+	AppName string `json:"app_name,omitempty"`
+	Label   string `json:"label,omitempty"`
+}
+
+type DeleteKeyRequest struct {
+	ID int `json:"id"`
+}
+
+type DeleteKeyResponse struct {
+	Deleted bool `json:"deleted"`
+}
+
+type KeyInfo struct {
+	ID        int       `json:"id"`
+	Scope     string    `json:"scope"`
+	AppName   string    `json:"app_name,omitempty"`
+	Label     string    `json:"label,omitempty"`
+	HashHint  string    `json:"hash_hint"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type RotateKeyRequest struct {
 	RevokeOld bool `json:"revoke_old"`
 }
@@ -160,6 +191,10 @@ type DaemonState struct {
 }
 
 type APIKeyEntry struct {
+	ID        int       `json:"id"`
 	KeyHash   string    `json:"key_hash"`
+	Scope     string    `json:"scope"`
+	AppName   string    `json:"app_name,omitempty"`
+	Label     string    `json:"label,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
