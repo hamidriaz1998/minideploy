@@ -504,22 +504,24 @@ you can immediately run admin commands like `create-key` without passing `--api-
 
 
 | Flag | Default | Description |
-|---|---|---|
+|---|---|---|---|
 | `--host` | (required) | VPS hostname or IP |
 | `--ssh-user` | `root` | SSH user for initial setup |
 | `--app-name` | `my-app` | Default app name to create directories for |
 | `--deploy-path` | `/opt/<app-name>` | Deploy path on server |
+| `-b, --binary` | running binary | Path to minideploy binary to upload |
+
+By default, the running binary (`os.Executable()`) is uploaded to the server. Use `--binary /path/to/minideploy` to upload a different version.
 
 The command:
-1. Cross-compiles the daemon for `linux/amd64`
-2. SCPs the binary to `/usr/local/bin/minideploy`
-3. Creates the `minideploy` system user
-4. Sets up directory structure
-5. Installs a systemd service for the daemon
-6. Configures sudoers for the `minideploy` user
-7. Generates and displays an API key
-8. Saves the admin key to `~/.config/minideploy/config.yml`
-9. Starts the daemon
+1. Uploads the minideploy binary to `/usr/local/bin/minideploy`
+2. Creates the `minideploy` system user
+3. Sets up directory structure
+4. Installs a systemd service for the daemon
+5. Configures sudoers for the `minideploy` user
+6. Generates and displays an API key
+7. Saves the admin key to `~/.config/minideploy/config.yml`
+8. Starts the daemon
 
 ## `minideploy completion`
 

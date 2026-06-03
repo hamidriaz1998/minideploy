@@ -32,22 +32,27 @@ GOOS=linux GOARCH=amd64 go build -o minideploy-linux .
 
 ### Quick Method: `init-server`
 
-The `init-server` command automates the full VPS setup:
+First, build the binary:
 
 ```bash
-minideploy init-server --host my-vps --ssh-user root
+go build -o minideploy .
+```
+
+Then `init-server` automates the rest of the VPS setup — it uploads the running binary and configures everything:
+
+```bash
+./minideploy init-server --host my-vps --ssh-user root
 ```
 
 This will:
 
-1. Cross-compile the daemon for `linux/amd64`
-2. SCP the binary to `/usr/local/bin/minideploy`
-3. Create a `minideploy` system user
-4. Create the directory structure (`/opt/<app>/upload`, `releases`, `/var/lib/minideploy`)
-5. Set up a systemd service file at `/etc/systemd/system/minideploy.service`
-6. Configure sudoers for the `minideploy` user
-7. Generate an API key
-8. Start the daemon
+1. Upload the current `minideploy` binary to `/usr/local/bin/minideploy` on the server
+2. Create a `minideploy` system user
+3. Create the directory structure (`/opt/<app>/upload`, `releases`, `/var/lib/minideploy`)
+4. Set up a systemd service file at `/etc/systemd/system/minideploy.service`
+5. Configure sudoers for the `minideploy` user
+6. Generate an API key
+7. Start the daemon
 
 The admin API key is automatically saved to `~/.config/minideploy/config.yml` so you can
 run admin commands like `create-key` immediately without passing `--api-key`.

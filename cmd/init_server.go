@@ -16,7 +16,7 @@ var initServerCmd = &cobra.Command{
 	Use:   "init-server",
 	Short: "Bootstrap the daemon on a VPS",
 	Long: `Set up the minideploy daemon on a remote server:
-1. Cross-compile the daemon for linux/amd64
+1. Copy the daemon binary to the server
 2. SSH into the server to:
    - Create minideploy user
    - Create directory structure
@@ -30,6 +30,7 @@ var initServerCmd = &cobra.Command{
 		sshUser, _ := cmd.Flags().GetString("ssh-user")
 		appName, _ := cmd.Flags().GetString("app-name")
 		deployPath, _ := cmd.Flags().GetString("deploy-path")
+		binaryPath, _ := cmd.Flags().GetString("binary")
 
 		if host == "" {
 			fmt.Fprintln(os.Stderr, "error: --host is required")
@@ -45,20 +46,18 @@ var initServerCmd = &cobra.Command{
 			deployPath = "/opt/" + appName
 		}
 
-		fmt.Println("[init] building daemon binary for linux/amd64...")
-		buildDir := "/tmp/minideploy-build"
-		os.MkdirAll(buildDir, 0755)
-		binaryPath := filepath.Join(buildDir, "minideploy")
-
-		buildCmd := exec.Command("go", "build", "-o", binaryPath, ".")
-		buildCmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=amd64")
-		buildCmd.Stdout = os.Stdout
-		buildCmd.Stderr = os.Stderr
-		if err := buildCmd.Run(); err != nil {
-			fmt.Fprintln(os.Stderr, "error: build failed:", err)
-			os.Exit(1)
+		if binaryPath == "" {
+			var err error
+			binaryPath, err = os.Executable()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "error: cannot determine running binary path:", err)
+				fmt.Fprintln(os.Stderr, "  Use --binary /path/to/minideploy to specify the binary")
+				os.Exit(1)
+			}
 		}
+		binaryPath, _ = filepath.Abs(binaryPath)
 
+		fmt.Printf("[init] using binary: %s\n", binaryPath)
 		fmt.Println("[init] generating API key...")
 		rawKey, _, err := daemon.GenerateAPIKey()
 		if err != nil {
@@ -205,4 +204,5 @@ func init() {
 	initServerCmd.Flags().String("ssh-user", "root", "SSH user for initial setup")
 	initServerCmd.Flags().String("app-name", "my-app", "Default app name")
 	initServerCmd.Flags().String("deploy-path", "", "Deploy path on server (default: /opt/<app-name>)")
+	initServerCmd.Flags().StringP("binary", "b", "", "Path to minideploy binary to upload (default: the running binary)")
 }
