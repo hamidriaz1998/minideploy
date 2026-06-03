@@ -33,7 +33,11 @@ server:
   api_key: <from init-server output>
 ```
 
-See `.deploy.yml.example` for a full reference.
+See `.deploy.yml.example` for a full reference. Or generate one interactively:
+
+```bash
+minideploy init
+```
 
 ### 3. Deploy
 
@@ -47,16 +51,36 @@ This runs your build steps, rsyncs artifacts to `/opt/my-api/upload/`, and tells
 
 | Command | Description |
 |---|---|
-| `daemon` | Start the daemon (run as systemd service) |
 | `deploy` | Full pipeline: build → upload → deploy |
 | `build` | Run build steps only |
 | `upload` | Rsync artifacts only |
 | `rollback [release]` | Rollback to a previous or specified release |
+| `destroy [app]` | Remove an app (soft or hard) |
 | `status` | Daemon health check |
 | `ps` | List running apps and instances |
 | `releases [app]` | List releases for an app |
 | `logs [app]` | Tail app logs |
+| `init` | Generate a `.deploy.yml` interactively |
 | `init-server` | Bootstrap daemon on a fresh VPS |
+| `daemon` | Start the daemon (run as systemd service) |
+
+## Documentation
+
+Detailed docs are in the [`docs/`](docs/index.md) directory:
+
+| Topic | File |
+|---|---|
+| Architecture | [01-overview.md](docs/01-overview.md) |
+| Installation | [02-installation.md](docs/02-installation.md) |
+| Configuration | [03-configuration.md](docs/03-configuration.md) |
+| CLI Reference | [04-cli-reference.md](docs/04-cli-reference.md) |
+| Deployment Walkthrough | [05-deployment.md](docs/05-deployment.md) |
+| Process Managers | [06-process-managers.md](docs/06-process-managers.md) |
+| Rollback & Destroy | [07-rollback-destroy.md](docs/07-rollback-destroy.md) |
+| API Reference | [08-api-reference.md](docs/08-api-reference.md) |
+| Security | [09-security.md](docs/09-security.md) |
+| Server Layout | [10-server-layout.md](docs/10-server-layout.md) |
+| Troubleshooting | [11-troubleshooting.md](docs/11-troubleshooting.md) |
 
 ## How It Works
 
