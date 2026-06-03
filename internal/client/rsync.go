@@ -48,8 +48,8 @@ func RunRsync(cfg RsyncConfig) error {
 	dest := fmt.Sprintf("%s@%s:%s/upload/", cfg.SSHUser, cfg.Host, cfg.DeployDir)
 
 	args := []string{
-		"-avz", "--delete",
-		"--no-owner", "--no-group", "--omit-dir-times",
+		"-rlvz", "--delete",
+		"--no-owner", "--no-group", "--no-perms", "--omit-dir-times",
 	}
 
 	args = append(args, cfg.Artifacts...)
