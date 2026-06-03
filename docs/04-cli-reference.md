@@ -471,8 +471,10 @@ npm run build --prefix frontend
 Bootstrap the minideploy daemon on a fresh VPS.
 
 ```
-minideploy init-server --host HOST [--ssh-user USER] [--app-name NAME] [--deploy-path PATH]
+minideploy init-server --host HOST [--ssh-user USER] [--app-name NAME] [--deploy-path PATH] [--binary PATH]
 ```
+
+The SSH user must have **passwordless sudo** access — `init-server` uses `sudo` for all privileged operations (installing the binary, writing systemd units, creating users, running systemctl).
 
 The admin API key is automatically saved to `~/.config/minideploy/config.yml` so
 you can immediately run admin commands like `create-key` without passing `--api-key`.

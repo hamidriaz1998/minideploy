@@ -65,40 +65,52 @@ var initServerCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		stateDir := "/var/lib/minideploy"
-		commands := []string{
-			fmt.Sprintf("id -u minideploy 2>/dev/null || useradd --system --no-create-home --shell /sbin/nologin minideploy"),
-			fmt.Sprintf("mkdir -p %s/upload %s/releases %s", deployPath, deployPath, stateDir),
-			fmt.Sprintf("chown -R minideploy:minideploy %s %s", deployPath, stateDir),
-		}
+	stateDir := "/var/lib/minideploy"
+	preCommands := []string{
+		fmt.Sprintf("id -u minideploy 2>/dev/null || sudo useradd --system --no-create-home --shell /sbin/nologin minideploy"),
+		fmt.Sprintf("sudo mkdir -p %s/upload %s/releases %s", deployPath, deployPath, stateDir),
+		fmt.Sprintf("sudo chown -R minideploy:minideploy %s %s", deployPath, stateDir),
+	}
 
-		fmt.Println("[init] uploading binary...")
-		scp := exec.Command("scp", binaryPath, fmt.Sprintf("%s@%s:/usr/local/bin/minideploy", sshUser, host))
-		scp.Stdout = os.Stdout
-		scp.Stderr = os.Stderr
-		if err := scp.Run(); err != nil {
-			fmt.Fprintln(os.Stderr, "error: scp failed:", err)
+	fmt.Println("[init] setting up directories and user...")
+	for _, cmdStr := range preCommands {
+		ssh := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host), cmdStr)
+		ssh.Stdout = os.Stdout
+		ssh.Stderr = os.Stderr
+		if err := ssh.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "error: command failed: %s: %v\n", cmdStr, err)
 			os.Exit(1)
 		}
+	}
 
-		commands = append(commands,
-			"chmod 755 /usr/local/bin/minideploy",
-			"chown root:root /usr/local/bin/minideploy",
-		)
+	remoteTmp := "/tmp/minideploy"
+	fmt.Printf("[init] uploading binary to %s@%s:%s...\n", sshUser, host, remoteTmp)
+	scp := exec.Command("scp", binaryPath, fmt.Sprintf("%s@%s:%s", sshUser, host, remoteTmp))
+	scp.Stdout = os.Stdout
+	scp.Stderr = os.Stderr
+	if err := scp.Run(); err != nil {
+		fmt.Fprintln(os.Stderr, "error: scp failed:", err)
+		os.Exit(1)
+	}
 
-		fmt.Println("[init] setting up daemon on server...")
-		for _, cmdStr := range commands {
-			ssh := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host), cmdStr)
-			ssh.Stdout = os.Stdout
-			ssh.Stderr = os.Stderr
-			if err := ssh.Run(); err != nil {
-				fmt.Fprintf(os.Stderr, "error: command failed: %s: %v\n", cmdStr, err)
-				os.Exit(1)
-			}
+	installCommands := []string{
+		fmt.Sprintf("sudo mv %s /usr/local/bin/minideploy", remoteTmp),
+		"sudo chmod 755 /usr/local/bin/minideploy",
+		"sudo chown root:root /usr/local/bin/minideploy",
+	}
+	fmt.Println("[init] installing binary...")
+	for _, cmdStr := range installCommands {
+		ssh := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host), cmdStr)
+		ssh.Stdout = os.Stdout
+		ssh.Stderr = os.Stderr
+		if err := ssh.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "error: command failed: %s: %v\n", cmdStr, err)
+			os.Exit(1)
 		}
+	}
 
-		fmt.Println("[init] writing systemd service file...")
-		serviceContent := fmt.Sprintf(`[Unit]
+	fmt.Println("[init] writing systemd service file...")
+	serviceContent := fmt.Sprintf(`[Unit]
 Description=minideploy Daemon
 After=network.target
 
@@ -115,24 +127,17 @@ StateDirectory=minideploy
 WantedBy=multi-user.target
 `, stateDir)
 
-		serviceFile := "/etc/systemd/system/minideploy.service"
-		ssh := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host),
-			fmt.Sprintf("cat > %s", serviceFile))
-		ssh.Stdin = os.Stdin
-		ssh.Stderr = os.Stderr
-		ssh.Stdin = nil
+	writeService := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host),
+		"sudo tee /etc/systemd/system/minideploy.service > /dev/null")
+	serviceStdin, _ := writeService.StdinPipe()
+	writeService.Stdout = os.Stdout
+	writeService.Stderr = os.Stderr
+	writeService.Start()
+	serviceStdin.Write([]byte(serviceContent))
+	serviceStdin.Close()
+	writeService.Wait()
 
-		ssh = exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host),
-			fmt.Sprintf("cat > %s", serviceFile))
-		stdin, _ := ssh.StdinPipe()
-		ssh.Stdout = os.Stdout
-		ssh.Stderr = os.Stderr
-		ssh.Start()
-		stdin.Write([]byte(serviceContent))
-		stdin.Close()
-		ssh.Wait()
-
-		sudoersContent := fmt.Sprintf(`# minideploy daemon - managed process commands
+	sudoersContent := fmt.Sprintf(`# minideploy daemon - managed process commands
 minideploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart *
 minideploy ALL=(root) NOPASSWD: /usr/bin/systemctl status *
 minideploy ALL=(root) NOPASSWD: /usr/bin/systemctl start *
@@ -140,23 +145,23 @@ minideploy ALL=(root) NOPASSWD: /usr/bin/systemctl stop *
 minideploy ALL=(root) NOPASSWD: /usr/bin/journalctl -u *
 minideploy ALL=(root) NOPASSWD: /usr/sbin/useradd *
 `)
-		fmt.Println("[init] writing sudoers...")
-		ssh2 := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host),
-			fmt.Sprintf("cat > /etc/sudoers.d/minideploy"))
-		stdin2, _ := ssh2.StdinPipe()
-		ssh2.Stdout = os.Stdout
-		ssh2.Stderr = os.Stderr
-		ssh2.Start()
-		stdin2.Write([]byte(sudoersContent))
-		stdin2.Close()
-		ssh2.Wait()
+	fmt.Println("[init] writing sudoers...")
+	writeSudoers := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host),
+		"sudo tee /etc/sudoers.d/minideploy > /dev/null")
+	sudoersStdin, _ := writeSudoers.StdinPipe()
+	writeSudoers.Stdout = os.Stdout
+	writeSudoers.Stderr = os.Stderr
+	writeSudoers.Start()
+	sudoersStdin.Write([]byte(sudoersContent))
+	sudoersStdin.Close()
+	writeSudoers.Wait()
 
 		fmt.Println("[init] enabling and starting daemon...")
 		enableCmds := []string{
-			"chmod 440 /etc/sudoers.d/minideploy",
-			"systemctl daemon-reload",
-			"systemctl enable minideploy",
-			"systemctl start minideploy",
+			"sudo chmod 440 /etc/sudoers.d/minideploy",
+			"sudo systemctl daemon-reload",
+			"sudo systemctl enable minideploy",
+			"sudo systemctl start minideploy",
 		}
 		for _, cmdStr := range enableCmds {
 			ssh := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host), cmdStr)

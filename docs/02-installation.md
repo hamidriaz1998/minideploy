@@ -41,18 +41,26 @@ go build -o minideploy .
 Then `init-server` automates the rest of the VPS setup — it uploads the running binary and configures everything:
 
 ```bash
+# Using root SSH user
 ./minideploy init-server --host my-vps --ssh-user root
+
+# Using a sudo-capable non-root user
+./minideploy init-server --host my-vps --ssh-user hamid
 ```
+
+The SSH user must have **passwordless sudo** access. All privileged operations (file install, systemctl, useradd) use `sudo` internally.
 
 This will:
 
-1. Upload the current `minideploy` binary to `/usr/local/bin/minideploy` on the server
+1. Upload the current `minideploy` binary to the server
 2. Create a `minideploy` system user
 3. Create the directory structure (`/opt/<app>/upload`, `releases`, `/var/lib/minideploy`)
 4. Set up a systemd service file at `/etc/systemd/system/minideploy.service`
 5. Configure sudoers for the `minideploy` user
 6. Generate an API key
 7. Start the daemon
+
+The admin API key is automatically saved to `~/.config/minideploy/config.yml` on your local machine.
 
 The admin API key is automatically saved to `~/.config/minideploy/config.yml` so you can
 run admin commands like `create-key` immediately without passing `--api-key`.
