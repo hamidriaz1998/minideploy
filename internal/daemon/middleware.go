@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -29,7 +28,7 @@ func recoveryMiddleware(next http.Handler) http.Handler {
 				if !ok {
 					err = fmt.Errorf("%v", rec)
 				}
-				log.Printf("PANIC: %v", err)
+				shared.Error("PANIC: %v", err)
 				writeError(w, http.StatusInternalServerError, "internal server error")
 			}
 		}()
@@ -42,7 +41,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		lrw := &loggedResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 		next.ServeHTTP(lrw, r)
-		log.Printf("%s %s %d %s", r.Method, r.URL.Path, lrw.statusCode, time.Since(start))
+		shared.Debug("%s %s %d %s", r.Method, r.URL.Path, lrw.statusCode, time.Since(start))
 	})
 }
 

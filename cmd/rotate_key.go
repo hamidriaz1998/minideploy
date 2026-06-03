@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -51,8 +50,7 @@ Requires the current API key for authentication (from config/env).`,
 			cfg.Server.APIKey = os.Getenv("MINIDEPLOY_API_KEY")
 		}
 		if cfg.Server.APIKey == "" {
-			fmt.Fprintln(os.Stderr, "error: no API key configured for authentication")
-			os.Exit(1)
+			shared.Fatal("no API key configured for authentication")
 		}
 
 		apiClient := client.NewAPIClient(cfg.Server.Host, cfg.Server.APIPort, cfg.Server.APIKey)
@@ -61,16 +59,15 @@ Requires the current API key for authentication (from config/env).`,
 			RevokeOld: revokeOld,
 		})
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
-		fmt.Printf("New API key: %s\n", resp.NewKey)
-		fmt.Printf("Active keys: %d\n", resp.KeysCount)
+		shared.Success("New API key: %s", resp.NewKey)
+		shared.Info("Active keys: %d", resp.KeysCount)
 		if revokeOld {
-			fmt.Println("Old keys have been revoked.")
+			shared.Info("Old keys have been revoked.")
 		} else {
-			fmt.Println("Old keys remain valid. Use --revoke-old to invalidate them.")
+			shared.Info("Old keys remain valid. Use --revoke-old to invalidate them.")
 		}
 	},
 }

@@ -1,13 +1,13 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 
 	"github.com/spf13/cobra"
 
 	"github.com/hamid/minideploy/internal/client"
+	"github.com/hamid/minideploy/internal/shared"
 )
 
 var deleteKeyCmd = &cobra.Command{
@@ -18,8 +18,7 @@ var deleteKeyCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		id, err := strconv.Atoi(args[0])
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error: invalid key id")
-			os.Exit(1)
+			shared.Fatal("invalid key id")
 		}
 
 		host, _ := cmd.Flags().GetString("host")
@@ -33,8 +32,7 @@ var deleteKeyCmd = &cobra.Command{
 			apiKey = os.Getenv("MINIDEPLOY_API_KEY")
 		}
 		if apiKey == "" {
-			fmt.Fprintln(os.Stderr, "error: no admin API key found")
-			os.Exit(1)
+			shared.Fatal("no admin API key found")
 		}
 
 		cfg := resolveServerConfig(host, port, apiKey)
@@ -42,12 +40,11 @@ var deleteKeyCmd = &cobra.Command{
 
 		resp, err := apiClient.DeleteKey(id)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
 		if resp.Deleted {
-			fmt.Printf("Key %d deleted\n", id)
+			shared.Success("Key %d deleted", id)
 		}
 	},
 }

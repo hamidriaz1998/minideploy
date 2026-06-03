@@ -1,12 +1,10 @@
 package cmd
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/spf13/cobra"
 
 	"github.com/hamid/minideploy/internal/client"
+	"github.com/hamid/minideploy/internal/shared"
 )
 
 var buildCmd = &cobra.Command{
@@ -19,26 +17,26 @@ var buildCmd = &cobra.Command{
 			var err error
 			configPath, err = client.FindConfig()
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "error:", err)
-				os.Exit(1)
+				shared.Fatal("%v", err)
 			}
 		}
 
 		cfg, err := client.LoadConfig(configPath)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
+		shared.Info("running build steps for %s", cfg.AppName)
 		if err := client.RunBuildSteps(cfg.Build); err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
+		shared.Debug("verifying artifacts: %v", cfg.Artifacts)
 		if err := client.VerifyArtifacts(cfg.Artifacts); err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
+
+		shared.Success("build complete for %s", cfg.AppName)
 	},
 }
 

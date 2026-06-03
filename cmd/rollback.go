@@ -1,9 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/spf13/cobra"
 
 	"github.com/hamid/minideploy/internal/client"
@@ -21,20 +18,17 @@ var rollbackCmd = &cobra.Command{
 			var err error
 			configPath, err = client.FindConfig()
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "error:", err)
-				os.Exit(1)
+				shared.Fatal("%v", err)
 			}
 		}
 
 		cfg, err := client.LoadConfig(configPath)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
 		if cfg.Server.APIKey == "" {
-			fmt.Fprintln(os.Stderr, "error: no API key configured")
-			os.Exit(1)
+			shared.Fatal("no API key configured")
 		}
 
 		releaseName := ""
@@ -48,12 +42,11 @@ var rollbackCmd = &cobra.Command{
 			ReleaseName: releaseName,
 		})
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
-		fmt.Printf("[rollback] rolled back to release %s\n", resp.Release)
-		fmt.Printf("[rollback] instances restarted: %v\n", resp.Instances)
+		shared.Success("rollback: rolled back to release %s", resp.Release)
+		shared.Info("rollback: instances restarted: %v", resp.Instances)
 	},
 }
 

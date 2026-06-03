@@ -3,12 +3,13 @@ package daemon
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/hamid/minideploy/internal/shared"
 )
 
 func Run(port int, stateDir string) error {
@@ -32,14 +33,14 @@ func Run(port int, stateDir string) error {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		log.Printf("minideploy daemon v%s listening on %s", Version, addr)
+		shared.Info("minideploy daemon v%s listening on %s", Version, addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %v", err)
+			shared.Fatal("listen: %v", err)
 		}
 	}()
 
 	<-quit
-	log.Println("shutting down...")
+	shared.Info("shutting down...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -48,6 +49,6 @@ func Run(port int, stateDir string) error {
 		return fmt.Errorf("forced shutdown: %w", err)
 	}
 
-	log.Println("daemon stopped")
+	shared.Info("daemon stopped")
 	return nil
 }

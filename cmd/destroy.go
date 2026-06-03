@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -34,8 +33,7 @@ Use --confirm to acknowledge the action.`,
 		}
 
 		if !confirm {
-			fmt.Fprintln(os.Stderr, "error: --confirm is required to destroy an app")
-			os.Exit(1)
+			shared.Fatal("--confirm is required to destroy an app")
 		}
 
 		cfg := &client.Config{}
@@ -44,15 +42,13 @@ Use --confirm to acknowledge the action.`,
 				var err error
 				configPath, err = client.FindConfig()
 				if err != nil {
-					fmt.Fprintln(os.Stderr, "error:", err)
-					os.Exit(1)
+					shared.Fatal("%v", err)
 				}
 			}
 			var err error
 			cfg, err = client.LoadConfig(configPath)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "error:", err)
-				os.Exit(1)
+				shared.Fatal("%v", err)
 			}
 			appName = cfg.AppName
 		}
@@ -63,13 +59,10 @@ Use --confirm to acknowledge the action.`,
 			}
 		}
 		if cfg.Server.APIKey == "" && appName != "" {
-			// bare command: minideploy destroy my-app --confirm
-			// try env variable
 			cfg.Server.APIKey = os.Getenv("MINIDEPLOY_API_KEY")
 		}
 		if cfg.Server.APIKey == "" {
-			fmt.Fprintln(os.Stderr, "error: no API key configured")
-			os.Exit(1)
+			shared.Fatal("no API key configured")
 		}
 		if cfg.Server.Host == "" {
 			cfg.Server.Host = "127.0.0.1"
@@ -82,7 +75,7 @@ Use --confirm to acknowledge the action.`,
 		if soft {
 			mode = "soft"
 		}
-		fmt.Printf("[destroy] %s destroying %q on %s...\n", mode, appName, cfg.Server.Host)
+		shared.Info("destroy: %s destroying %q on %s...", mode, appName, cfg.Server.Host)
 
 		apiClient := client.NewAPIClient(cfg.Server.Host, cfg.Server.APIPort, cfg.Server.APIKey)
 		resp, err := apiClient.Destroy(shared.DestroyRequest{
@@ -91,15 +84,14 @@ Use --confirm to acknowledge the action.`,
 			Confirm: true,
 		})
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
 		mode = "hard"
 		if resp.Soft {
 			mode = "soft"
 		}
-		fmt.Printf("[destroy] %s destroyed %q\n", mode, resp.AppName)
+		shared.Success("destroy: %s destroyed %q", mode, resp.AppName)
 	},
 }
 

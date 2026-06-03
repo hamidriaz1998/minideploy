@@ -9,6 +9,8 @@ import (
 
 	"charm.land/huh/v2"
 	"github.com/spf13/cobra"
+
+	"github.com/hamid/minideploy/internal/shared"
 )
 
 var initCmd = &cobra.Command{
@@ -23,30 +25,29 @@ Use 'minideploy init --force' to overwrite an existing file.`,
 		force, _ := cmd.Flags().GetBool("force")
 
 		if _, err := os.Stat(".deploy.yml"); err == nil && !force {
-			fmt.Fprintln(os.Stderr, ".deploy.yml already exists. Use --force to overwrite.")
-			os.Exit(1)
+			shared.Fatal(".deploy.yml already exists. Use --force to overwrite.")
 		}
 
-	var (
-		appName             string
-		serviceType         = "systemd"
-		serviceName         string
-		instanceCount       = "1"
-		startPort           = "3000"
-		deployPath          string
-		buildSteps          string
-		artifacts           string
-		serverHost          string
-		apiPort             = "8443"
-		sshUser             = "root"
-		apiKey              string
-		envVars             string
-		keepReleases        = "5"
-		healthEndpoint      string
-		healthTimeout       = "10"
-		healthRetries       = "3"
-		healthWaitInstances = "0"
-	)
+		var (
+			appName             string
+			serviceType         = "systemd"
+			serviceName         string
+			instanceCount       = "1"
+			startPort           = "3000"
+			deployPath          string
+			buildSteps          string
+			artifacts           string
+			serverHost          string
+			apiPort             = "8443"
+			sshUser             = "root"
+			apiKey              string
+			envVars             string
+			keepReleases        = "5"
+			healthEndpoint      string
+			healthTimeout       = "10"
+			healthRetries       = "3"
+			healthWaitInstances = "0"
+		)
 
 		appInput := huh.NewInput().
 			Title("App name").
@@ -225,8 +226,7 @@ Use 'minideploy init --force' to overwrite an existing file.`,
 		)
 
 		if err := form.Run(); err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
 		count, _ := strconv.Atoi(instanceCount)
@@ -317,11 +317,10 @@ Use 'minideploy init --force' to overwrite an existing file.`,
 		b.WriteString("#   - cmd: make warmup\n")
 
 		if err := os.WriteFile(".deploy.yml", []byte(b.String()), 0644); err != nil {
-			fmt.Fprintf(os.Stderr, "error writing .deploy.yml: %v\n", err)
-			os.Exit(1)
+			shared.Fatal("error writing .deploy.yml: %v", err)
 		}
 
-		fmt.Println("✅ .deploy.yml generated successfully!")
+		shared.Success(".deploy.yml generated successfully!")
 	},
 }
 

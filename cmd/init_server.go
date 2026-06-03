@@ -10,6 +10,7 @@ import (
 
 	"github.com/hamid/minideploy/internal/client"
 	"github.com/hamid/minideploy/internal/daemon"
+	"github.com/hamid/minideploy/internal/shared"
 )
 
 var initServerCmd = &cobra.Command{
@@ -31,10 +32,10 @@ var initServerCmd = &cobra.Command{
 		appName, _ := cmd.Flags().GetString("app-name")
 		deployPath, _ := cmd.Flags().GetString("deploy-path")
 		binaryPath, _ := cmd.Flags().GetString("binary")
+		skipBinUpload, _ := cmd.Flags().GetBool("skip-bin-upload")
 
 		if host == "" {
-			fmt.Fprintln(os.Stderr, "error: --host is required")
-			os.Exit(1)
+			shared.Fatal("--host is required (or add server.host to .deploy.yml)")
 		}
 		if sshUser == "" {
 			sshUser = "root"
@@ -46,72 +47,107 @@ var initServerCmd = &cobra.Command{
 			deployPath = "/opt/" + appName
 		}
 
+		// Auto-pull from .deploy.yml if present
+		if cfg, err := client.LoadConfig(".deploy.yml"); err == nil {
+			if appName == "my-app" && cfg.AppName != "" {
+				appName = cfg.AppName
+				deployPath = "/opt/" + appName
+			}
+			if host == "" && cfg.Server.Host != "" {
+				host = cfg.Server.Host
+			}
+			if sshUser == "root" && cfg.Server.SSHUser != "" {
+				sshUser = cfg.Server.SSHUser
+			}
+			if deployPath == "/opt/"+appName && cfg.DeployPath != "" {
+				deployPath = cfg.DeployPath
+			}
+			shared.Debug("auto-pulled config from .deploy.yml: host=%s, app=%s, path=%s, ssh_user=%s", host, appName, deployPath, sshUser)
+		}
+
+		if host == "" {
+			shared.Fatal("--host is required")
+		}
+
+		// Resolve binary path
 		if binaryPath == "" {
 			var err error
 			binaryPath, err = os.Executable()
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "error: cannot determine running binary path:", err)
-				fmt.Fprintln(os.Stderr, "  Use --binary /path/to/minideploy to specify the binary")
-				os.Exit(1)
+				shared.Fatal("cannot determine running binary path: %v\n  Use --binary /path/to/minideploy to specify the binary", err)
 			}
 		}
 		binaryPath, _ = filepath.Abs(binaryPath)
+		shared.Info("using binary: %s", binaryPath)
 
-		fmt.Printf("[init] using binary: %s\n", binaryPath)
-		fmt.Println("[init] generating API key...")
+		shared.Info("generating API key...")
 		rawKey, _, err := daemon.GenerateAPIKey()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error: generate key:", err)
-			os.Exit(1)
+			shared.Fatal("generate key: %v", err)
 		}
 
-	stateDir := "/var/lib/minideploy"
-	preCommands := []string{
-		fmt.Sprintf("id -u minideploy 2>/dev/null || sudo useradd --system --no-create-home --shell /sbin/nologin minideploy"),
-		fmt.Sprintf("sudo mkdir -p %s/upload %s/releases %s", deployPath, deployPath, stateDir),
-		fmt.Sprintf("sudo chown -R minideploy:minideploy %s %s", deployPath, stateDir),
-		fmt.Sprintf("sudo chmod 1777 %s/upload", deployPath),
-	}
-
-	fmt.Println("[init] setting up directories and user...")
-	for _, cmdStr := range preCommands {
-		ssh := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host), cmdStr)
-		ssh.Stdout = os.Stdout
-		ssh.Stderr = os.Stderr
-		if err := ssh.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "error: command failed: %s: %v\n", cmdStr, err)
-			os.Exit(1)
+		stateDir := "/var/lib/minideploy"
+		preCommands := []string{
+			fmt.Sprintf("id -u minideploy 2>/dev/null || sudo useradd --system --no-create-home --shell /sbin/nologin minideploy"),
+			fmt.Sprintf("sudo mkdir -p %s/upload %s/releases %s", deployPath, deployPath, stateDir),
+			fmt.Sprintf("sudo chown -R minideploy:minideploy %s %s", deployPath, stateDir),
+			fmt.Sprintf("sudo chmod 1777 %s/upload", deployPath),
 		}
-	}
 
-	remoteTmp := "/tmp/minideploy"
-	fmt.Printf("[init] uploading binary to %s@%s:%s...\n", sshUser, host, remoteTmp)
-	scp := exec.Command("scp", binaryPath, fmt.Sprintf("%s@%s:%s", sshUser, host, remoteTmp))
-	scp.Stdout = os.Stdout
-	scp.Stderr = os.Stderr
-	if err := scp.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "error: scp failed:", err)
-		os.Exit(1)
-	}
-
-	installCommands := []string{
-		fmt.Sprintf("sudo mv %s /usr/local/bin/minideploy", remoteTmp),
-		"sudo chmod 755 /usr/local/bin/minideploy",
-		"sudo chown root:root /usr/local/bin/minideploy",
-	}
-	fmt.Println("[init] installing binary...")
-	for _, cmdStr := range installCommands {
-		ssh := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host), cmdStr)
-		ssh.Stdout = os.Stdout
-		ssh.Stderr = os.Stderr
-		if err := ssh.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "error: command failed: %s: %v\n", cmdStr, err)
-			os.Exit(1)
+		shared.Info("setting up directories and user...")
+		for _, cmdStr := range preCommands {
+			shared.Debug("running: %s", cmdStr)
+			ssh := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host), cmdStr)
+			ssh.Stdout = os.Stdout
+			ssh.Stderr = os.Stderr
+			if err := ssh.Run(); err != nil {
+				shared.Fatal("command failed: %s: %v", cmdStr, err)
+			}
 		}
-	}
 
-	fmt.Println("[init] writing systemd service file...")
-	serviceContent := fmt.Sprintf(`[Unit]
+		// Check if binary already exists on remote
+		binaryExists := false
+		if !skipBinUpload {
+			shared.Debug("checking if minideploy binary exists on remote...")
+			checkBin := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host), "command -v minideploy")
+			if err := checkBin.Run(); err == nil {
+				shared.Debug("binary already installed, skipping upload")
+				binaryExists = true
+			}
+		} else {
+			shared.Debug("skipping binary upload check (--skip-bin-upload)")
+		}
+
+		if !binaryExists {
+			remoteTmp := "/tmp/minideploy"
+			shared.Info("uploading binary to %s@%s:%s...", sshUser, host, remoteTmp)
+			shared.Debug("scp %s %s@%s:%s", binaryPath, sshUser, host, remoteTmp)
+			scp := exec.Command("scp", binaryPath, fmt.Sprintf("%s@%s:%s", sshUser, host, remoteTmp))
+			scp.Stdout = os.Stdout
+			scp.Stderr = os.Stderr
+			if err := scp.Run(); err != nil {
+				shared.Fatal("scp failed: %v", err)
+			}
+
+			installCommands := []string{
+				fmt.Sprintf("sudo mv %s /usr/local/bin/minideploy", remoteTmp),
+				"sudo chmod 755 /usr/local/bin/minideploy",
+				"sudo chown root:root /usr/local/bin/minideploy",
+			}
+			shared.Info("installing binary...")
+			for _, cmdStr := range installCommands {
+				shared.Debug("running: %s", cmdStr)
+				ssh := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host), cmdStr)
+				ssh.Stdout = os.Stdout
+				ssh.Stderr = os.Stderr
+				if err := ssh.Run(); err != nil {
+					shared.Fatal("command failed: %s: %v", cmdStr, err)
+				}
+			}
+		}
+
+		shared.Info("writing systemd service file...")
+		serviceContent := fmt.Sprintf(`[Unit]
 Description=minideploy Daemon
 After=network.target
 
@@ -128,17 +164,17 @@ StateDirectory=minideploy
 WantedBy=multi-user.target
 `, stateDir)
 
-	writeService := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host),
-		"sudo tee /etc/systemd/system/minideploy.service > /dev/null")
-	serviceStdin, _ := writeService.StdinPipe()
-	writeService.Stdout = os.Stdout
-	writeService.Stderr = os.Stderr
-	writeService.Start()
-	serviceStdin.Write([]byte(serviceContent))
-	serviceStdin.Close()
-	writeService.Wait()
+		writeService := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host),
+			"sudo tee /etc/systemd/system/minideploy.service > /dev/null")
+		serviceStdin, _ := writeService.StdinPipe()
+		writeService.Stdout = os.Stdout
+		writeService.Stderr = os.Stderr
+		writeService.Start()
+		serviceStdin.Write([]byte(serviceContent))
+		serviceStdin.Close()
+		writeService.Wait()
 
-	sudoersContent := fmt.Sprintf(`# minideploy daemon - managed process commands
+		sudoersContent := fmt.Sprintf(`# minideploy daemon - managed process commands
 minideploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart *
 minideploy ALL=(root) NOPASSWD: /usr/bin/systemctl status *
 minideploy ALL=(root) NOPASSWD: /usr/bin/systemctl start *
@@ -146,18 +182,18 @@ minideploy ALL=(root) NOPASSWD: /usr/bin/systemctl stop *
 minideploy ALL=(root) NOPASSWD: /usr/bin/journalctl -u *
 minideploy ALL=(root) NOPASSWD: /usr/sbin/useradd *
 `)
-	fmt.Println("[init] writing sudoers...")
-	writeSudoers := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host),
-		"sudo tee /etc/sudoers.d/minideploy > /dev/null")
-	sudoersStdin, _ := writeSudoers.StdinPipe()
-	writeSudoers.Stdout = os.Stdout
-	writeSudoers.Stderr = os.Stderr
-	writeSudoers.Start()
-	sudoersStdin.Write([]byte(sudoersContent))
-	sudoersStdin.Close()
-	writeSudoers.Wait()
+		shared.Info("writing sudoers...")
+		writeSudoers := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host),
+			"sudo tee /etc/sudoers.d/minideploy > /dev/null")
+		sudoersStdin, _ := writeSudoers.StdinPipe()
+		writeSudoers.Stdout = os.Stdout
+		writeSudoers.Stderr = os.Stderr
+		writeSudoers.Start()
+		sudoersStdin.Write([]byte(sudoersContent))
+		sudoersStdin.Close()
+		writeSudoers.Wait()
 
-		fmt.Println("[init] enabling and starting daemon...")
+		shared.Info("enabling and starting daemon...")
 		enableCmds := []string{
 			"sudo chmod 440 /etc/sudoers.d/minideploy",
 			"sudo systemctl daemon-reload",
@@ -165,20 +201,21 @@ minideploy ALL=(root) NOPASSWD: /usr/sbin/useradd *
 			"sudo systemctl start minideploy",
 		}
 		for _, cmdStr := range enableCmds {
+			shared.Debug("running: %s", cmdStr)
 			ssh := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host), cmdStr)
 			ssh.Stdout = os.Stdout
 			ssh.Stderr = os.Stderr
 			if err := ssh.Run(); err != nil {
-				fmt.Fprintf(os.Stderr, "warning: %s failed: %v\n", cmdStr, err)
+				shared.Warn("%s failed: %v", cmdStr, err)
 			}
 		}
 
-		fmt.Println("[init] saving admin key to global config...")
+		shared.Info("saving admin key to global config...")
 		globalCfg := &client.GlobalConfig{AdminKey: rawKey}
 		if err := client.SaveGlobalConfig(globalCfg); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: could not save admin key to config: %v\n", err)
+			shared.Warn("could not save admin key to config: %v", err)
 		} else {
-			fmt.Println("[init] admin key saved to ~/.config/minideploy/config.yml")
+			shared.Info("admin key saved to ~/.config/minideploy/config.yml")
 		}
 
 		fmt.Println()
@@ -206,9 +243,10 @@ minideploy ALL=(root) NOPASSWD: /usr/sbin/useradd *
 
 func init() {
 	rootCmd.AddCommand(initServerCmd)
-	initServerCmd.Flags().String("host", "", "VPS hostname or IP (required)")
+	initServerCmd.Flags().String("host", "", "VPS hostname or IP (default: from .deploy.yml)")
 	initServerCmd.Flags().String("ssh-user", "root", "SSH user for initial setup")
 	initServerCmd.Flags().String("app-name", "my-app", "Default app name")
 	initServerCmd.Flags().String("deploy-path", "", "Deploy path on server (default: /opt/<app-name>)")
 	initServerCmd.Flags().StringP("binary", "b", "", "Path to minideploy binary to upload (default: the running binary)")
+	initServerCmd.Flags().Bool("skip-bin-upload", false, "Skip binary upload (use existing installation)")
 }

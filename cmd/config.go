@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/hamid/minideploy/internal/client"
+	"github.com/hamid/minideploy/internal/shared"
 )
 
 var configCmd = &cobra.Command{
@@ -23,8 +23,7 @@ var configGetCmd = &cobra.Command{
 		key := args[0]
 		cfg, err := client.LoadGlobalConfig()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
 		switch key {
@@ -35,8 +34,7 @@ var configGetCmd = &cobra.Command{
 				fmt.Println(cfg.AdminKey)
 			}
 		default:
-			fmt.Fprintf(os.Stderr, "error: unknown config key %q\n", key)
-			os.Exit(1)
+			shared.Fatal("unknown config key %q", key)
 		}
 	},
 }
@@ -49,24 +47,21 @@ var configSetCmd = &cobra.Command{
 		key, value := args[0], args[1]
 		cfg, err := client.LoadGlobalConfig()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
 		switch key {
 		case "admin_key":
 			cfg.AdminKey = value
 		default:
-			fmt.Fprintf(os.Stderr, "error: unknown config key %q\n", key)
-			os.Exit(1)
+			shared.Fatal("unknown config key %q", key)
 		}
 
 		if err := client.SaveGlobalConfig(cfg); err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
-		fmt.Printf("config %s updated\n", key)
+		shared.Success("config %s updated", key)
 	},
 }
 

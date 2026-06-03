@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/hamid/minideploy/internal/client"
+	"github.com/hamid/minideploy/internal/shared"
 )
 
 var releasesCmd = &cobra.Command{
@@ -33,12 +33,11 @@ var releasesCmd = &cobra.Command{
 
 		releases, err := apiClient.AppReleases(appName)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
 		if len(releases) == 0 {
-			fmt.Printf("no releases for app %q\n", appName)
+			shared.Info("no releases for app %q", appName)
 			return
 		}
 

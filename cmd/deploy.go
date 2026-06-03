@@ -1,9 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/spf13/cobra"
 
 	"github.com/hamid/minideploy/internal/client"
@@ -21,47 +18,53 @@ var deployCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		configPath, _ := cmd.Flags().GetString("config")
 		releaseName, _ := cmd.Flags().GetString("release")
+		skipBuild, _ := cmd.Flags().GetBool("skip-build")
+		skipUpload, _ := cmd.Flags().GetBool("skip-upload")
 
 		if configPath == "" {
 			var err error
 			configPath, err = client.FindConfig()
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "error:", err)
-				os.Exit(1)
+				shared.Fatal("%v", err)
 			}
 		}
 
 		cfg, err := client.LoadConfig(configPath)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
-		fmt.Println("[deploy] starting deployment for", cfg.AppName)
+		shared.Info("starting deployment for %s", cfg.AppName)
 
-		if err := client.RunBuildSteps(cfg.Build); err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+		if skipUpload || !skipBuild {
+			shared.Debug("running build steps: %v", cfg.Build)
+			if err := client.RunBuildSteps(cfg.Build); err != nil {
+				shared.Fatal("%v", err)
+			}
+			shared.Debug("verifying artifacts: %v", cfg.Artifacts)
+			if err := client.VerifyArtifacts(cfg.Artifacts); err != nil {
+				shared.Fatal("%v", err)
+			}
+		} else {
+			shared.Debug("skipping build step (--skip-build)")
 		}
 
-		if err := client.VerifyArtifacts(cfg.Artifacts); err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
-		}
-
-		if err := client.RunRsync(client.RsyncConfig{
-			SSHUser:   cfg.Server.SSHUser,
-			Host:      cfg.Server.Host,
-			DeployDir: cfg.DeployPath,
-			Artifacts: cfg.Artifacts,
-		}); err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+		if !skipUpload {
+			shared.Info("uploading artifacts to %s@%s:%s/upload/", cfg.Server.SSHUser, cfg.Server.Host, cfg.DeployPath)
+			if err := client.RunRsync(client.RsyncConfig{
+				SSHUser:   cfg.Server.SSHUser,
+				Host:      cfg.Server.Host,
+				DeployDir: cfg.DeployPath,
+				Artifacts: cfg.Artifacts,
+			}); err != nil {
+				shared.Fatal("%v", err)
+			}
+		} else {
+			shared.Debug("skipping upload (--skip-upload), using existing files in upload/")
 		}
 
 		if cfg.Server.APIKey == "" {
-			fmt.Fprintln(os.Stderr, "error: no API key configured (set server.api_key, MINIDEPLOY_API_KEY env, or .env)")
-			os.Exit(1)
+			shared.Fatal("no API key configured (set server.api_key, MINIDEPLOY_API_KEY env, or .env)")
 		}
 
 		host := cfg.Server.Host
@@ -69,12 +72,11 @@ var deployCmd = &cobra.Command{
 			apiClient := client.NewAPIClient("127.0.0.1", cfg.Server.APIPort, cfg.Server.APIKey)
 			tunnel, err := client.StartTunnel(host, cfg.Server.SSHUser, cfg.Server.APIPort, cfg.Server.APIPort)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "error: ssh tunnel:", err)
-				os.Exit(1)
+				shared.Fatal("ssh tunnel: %v", err)
 			}
 			defer tunnel.Close()
 
-			fmt.Println("[deploy] ssh tunnel established")
+			shared.Debug("ssh tunnel established to %s", host)
 			doDeploy(apiClient, cfg, releaseName)
 		} else {
 			apiClient := client.NewAPIClient(host, cfg.Server.APIPort, cfg.Server.APIKey)
@@ -95,30 +97,31 @@ func doDeploy(apiClient *client.APIClient, cfg *client.Config, releaseName strin
 	}
 	if releaseName != "" {
 		req.ReleaseName = releaseName
+		shared.Debug("using custom release name: %s", releaseName)
 	}
 
+	shared.Debug("sending deploy request to daemon")
 	resp, err := apiClient.Deploy(req)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
+		shared.Fatal("%v", err)
 	}
 
-	fmt.Printf("[deploy] release %s deployed successfully\n", resp.Release)
-	fmt.Printf("[deploy] instances restarted: %v\n", resp.Instances)
+	shared.Success("release %s deployed successfully", resp.Release)
+	shared.Info("instances restarted: %v", resp.Instances)
 	if resp.RolledBack {
-		fmt.Printf("[deploy] WARNING: health check failed, rolled back to %s\n", resp.RolledBackTo)
+		shared.Warn("health check failed, rolled back to %s", resp.RolledBackTo)
 	}
 	if len(resp.HealthResults) > 0 {
 		for _, hr := range resp.HealthResults {
-			status := "✓"
-			if !hr.Passed {
-				status = "✗"
+			if hr.Passed {
+				shared.Success("health ✓ port %d %s", hr.Port, hr.Instance)
+			} else {
+				extra := ""
+				if hr.Error != "" {
+					extra = " (" + hr.Error + ")"
+				}
+				shared.Error("health ✗ port %d %s%s", hr.Port, hr.Instance, extra)
 			}
-			extra := ""
-			if hr.Error != "" {
-				extra = " (" + hr.Error + ")"
-			}
-			fmt.Printf("[deploy]   health %s port %d %s%s\n", status, hr.Port, hr.Instance, extra)
 		}
 	}
 }
@@ -127,4 +130,6 @@ func init() {
 	rootCmd.AddCommand(deployCmd)
 	deployCmd.Flags().StringP("config", "c", "", "path to .deploy.yml")
 	deployCmd.Flags().StringP("release", "r", "", "custom release name (default: auto-generated)")
+	deployCmd.Flags().Bool("skip-build", false, "skip build steps and artifact verification")
+	deployCmd.Flags().Bool("skip-upload", false, "skip build and upload, deploy from existing upload/")
 }

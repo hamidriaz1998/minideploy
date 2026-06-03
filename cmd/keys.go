@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/hamid/minideploy/internal/client"
+	"github.com/hamid/minideploy/internal/shared"
 )
 
 var keysCmd = &cobra.Command{
@@ -25,8 +26,7 @@ var keysCmd = &cobra.Command{
 			apiKey = os.Getenv("MINIDEPLOY_API_KEY")
 		}
 		if apiKey == "" {
-			fmt.Fprintln(os.Stderr, "error: no admin API key found")
-			os.Exit(1)
+			shared.Fatal("no admin API key found")
 		}
 
 		cfg := resolveServerConfig(host, port, apiKey)
@@ -34,12 +34,11 @@ var keysCmd = &cobra.Command{
 
 		keys, err := apiClient.ListKeys()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
 		if len(keys) == 0 {
-			fmt.Println("No API keys found")
+			shared.Info("No API keys found")
 			return
 		}
 

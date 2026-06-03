@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -32,8 +31,7 @@ status/logs for a single app.`,
 			apiKey = os.Getenv("MINIDEPLOY_API_KEY")
 		}
 		if apiKey == "" {
-			fmt.Fprintln(os.Stderr, "error: no admin API key found (set --api-key, MINIDEPLOY_API_KEY, or admin_key in config)")
-			os.Exit(1)
+			shared.Fatal("no admin API key found (set --api-key, MINIDEPLOY_API_KEY, or admin_key in config)")
 		}
 
 		cfg := resolveServerConfig(host, port, apiKey)
@@ -47,19 +45,18 @@ status/logs for a single app.`,
 
 		resp, err := apiClient.CreateKey(req)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
-		fmt.Printf("Key created (id=%d)\n", resp.ID)
-		fmt.Printf("Scope:   %s\n", resp.Scope)
+		shared.Success("Key created (id=%d)", resp.ID)
+		shared.Info("Scope:   %s", resp.Scope)
 		if resp.AppName != "" {
-			fmt.Printf("App:     %s\n", resp.AppName)
+			shared.Info("App:     %s", resp.AppName)
 		}
 		if resp.Label != "" {
-			fmt.Printf("Label:   %s\n", resp.Label)
+			shared.Info("Label:   %s", resp.Label)
 		}
-		fmt.Printf("API Key: %s\n", resp.RawKey)
+		shared.Info("API Key: %s", resp.RawKey)
 	},
 }
 

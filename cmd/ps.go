@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/hamid/minideploy/internal/client"
+	"github.com/hamid/minideploy/internal/shared"
 )
 
 var psCmd = &cobra.Command{
@@ -23,12 +23,11 @@ var psCmd = &cobra.Command{
 
 		apps, err := apiClient.ListApps()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
 		if len(apps) == 0 {
-			fmt.Println("no apps registered")
+			shared.Info("no apps registered")
 			return
 		}
 

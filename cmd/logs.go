@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/hamid/minideploy/internal/client"
+	"github.com/hamid/minideploy/internal/shared"
 )
 
 var logsCmd = &cobra.Command{
@@ -33,8 +33,7 @@ var logsCmd = &cobra.Command{
 
 		logs, err := apiClient.AppLogs(appName)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
 		fmt.Print(logs)

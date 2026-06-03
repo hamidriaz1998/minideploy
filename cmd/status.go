@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/hamid/minideploy/internal/client"
+	"github.com/hamid/minideploy/internal/shared"
 )
 
 var statusCmd = &cobra.Command{
@@ -23,8 +23,7 @@ var statusCmd = &cobra.Command{
 
 		status, err := apiClient.Status()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			os.Exit(1)
+			shared.Fatal("%v", err)
 		}
 
 		fmt.Printf("Daemon:  minideploy v%s\n", status.Version)
