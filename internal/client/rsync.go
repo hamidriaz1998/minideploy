@@ -49,7 +49,7 @@ func RunRsync(cfg RsyncConfig) error {
 
 	args := []string{
 		"-avz", "--delete",
-		"--no-owner", "--no-group",
+		"--no-owner", "--no-group", "--omit-dir-times",
 	}
 
 	args = append(args, cfg.Artifacts...)
