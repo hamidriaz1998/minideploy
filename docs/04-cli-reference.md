@@ -28,38 +28,50 @@ minideploy is a single binary with subcommands. Use `minideploy --help` to list 
 | Flag | Description |
 |---|---|
 | `--help` | Show help for any command |
+| `-v, --verbose` | Enable verbose logging (debug output, commands being run) |
 
 ## `minideploy deploy`
 
 Run the full deployment pipeline: build, rsync, and trigger the daemon deploy.
 
 ```
-minideploy deploy [--config path] [--release name]
+minideploy deploy [--config path] [--release name] [--skip-build] [--skip-upload]
 ```
 
 | Flag | Default | Description |
 |---|---|---|
 | `-c, --config` | `.deploy.yml` | Path to config file |
 | `-r, --release` | auto-generated | Custom release name (`YYYYMMDD-HHMMSS` format) |
+| `--skip-build` | `false` | Skip build steps and artifact verification (still uploads) |
+| `--skip-upload` | `false` | Skip build and upload entirely; deploy from whatever's in `upload/` |
 
 **Flow**: Run build steps → verify artifacts → rsync to server → POST /deploy → print result.
+
+**`--skip-build`**: Useful when iterating on deploy config or verifying uploads — you've already built locally and just want to re-upload and deploy.
+
+**`--skip-upload`**: Useful when re-deploying from files already on the server — skips building and rsync, goes straight to the daemon deploy step. Implies `--skip-build`.
 
 **Example**:
 
 ```bash
 $ minideploy deploy
-[deploy] starting deployment for my-api
-[build] (1/2) go build -o app .
-[build] (2/2) npm run build --prefix frontend
-[build] all 2 steps completed
-[rsync] rsync -avz --delete app frontend/build/ root@my-vps:/opt/my-api/upload/
+[INFO] starting deployment for my-api
+[INFO] running build steps for my-api
+[INFO] uploading artifacts to root@my-vps:/opt/my-api/upload/
+rsync -avz --delete app frontend/build/ root@my-vps:/opt/my-api/upload/
 sending incremental file list
 app
 frontend/build/index.html
               sent 8.2M bytes  received 48 bytes  1.6M bytes/sec
 
-[deploy] release 20260603-143022 deployed successfully
-[deploy] instances restarted: [my-api@3000 my-api@3001]
+[OK] release 20260603-143022 deployed successfully
+[INFO] instances restarted: [my-api@3000 my-api@3001]
+
+$ minideploy deploy --skip-upload
+[INFO] starting deployment for my-api
+[DEBUG] skipping upload (--skip-upload), using existing files in upload/
+[OK] release 20260603-143022 deployed successfully
+[INFO] instances restarted: [my-api@3000 my-api@3001]
 ```
 
 ## `minideploy build`
@@ -471,13 +483,24 @@ npm run build --prefix frontend
 Bootstrap the minideploy daemon on a fresh VPS.
 
 ```
-minideploy init-server --host HOST [--ssh-user USER] [--app-name NAME] [--deploy-path PATH] [--binary PATH]
+minideploy init-server [--host HOST] [--ssh-user USER] [--app-name NAME] [--deploy-path PATH] [--binary PATH] [--skip-bin-upload]
 ```
 
 The SSH user must have **passwordless sudo** access — `init-server` uses `sudo` for all privileged operations (installing the binary, writing systemd units, creating users, running systemctl).
 
 The admin API key is automatically saved to `~/.config/minideploy/config.yml` so
 you can immediately run admin commands like `create-key` without passing `--api-key`.
+
+**Auto-detection from `.deploy.yml`**: If `.deploy.yml` exists in the current directory,
+`init-server` automatically pulls `server.host`, `server.ssh_user`, `app_name`, and
+`deploy_path` from it. You can then run with zero flags:
+```
+minideploy init-server
+```
+CLI flags still take priority over values from `.deploy.yml`.
+
+**Auto-detection of existing binary**: If `/usr/local/bin/minideploy` already exists on the
+remote, `init-server` skips the SCP and install steps (unless `--skip-bin-upload` is set).
 
 **Output**:
 
@@ -506,24 +529,27 @@ you can immediately run admin commands like `create-key` without passing `--api-
 
 
 | Flag | Default | Description |
-|---|---|---|---|
-| `--host` | (required) | VPS hostname or IP |
+|---|---|---|
+| `--host` | from `.deploy.yml` | VPS hostname or IP |
 | `--ssh-user` | `root` | SSH user for initial setup |
 | `--app-name` | `my-app` | Default app name to create directories for |
 | `--deploy-path` | `/opt/<app-name>` | Deploy path on server |
 | `-b, --binary` | running binary | Path to minideploy binary to upload |
+| `--skip-bin-upload` | `false` | Skip binary upload (use existing `/usr/local/bin/minideploy`) |
 
 By default, the running binary (`os.Executable()`) is uploaded to the server. Use `--binary /path/to/minideploy` to upload a different version.
 
 The command:
-1. Uploads the minideploy binary to `/usr/local/bin/minideploy`
-2. Creates the `minideploy` system user
-3. Sets up directory structure
-4. Installs a systemd service for the daemon
-5. Configures sudoers for the `minideploy` user
-6. Generates and displays an API key
-7. Saves the admin key to `~/.config/minideploy/config.yml`
-8. Starts the daemon
+1. Checks for `.deploy.yml` and pulls host/app-name/path/ssh-user if present
+2. Checks if binary already exists on the remote; skips upload if so
+3. Uploads the minideploy binary to `/usr/local/bin/minideploy`
+4. Creates the `minideploy` system user
+5. Sets up directory structure
+6. Installs a systemd service for the daemon
+7. Configures sudoers for the `minideploy` user
+8. Generates and displays an API key
+9. Saves the admin key to `~/.config/minideploy/config.yml`
+10. Starts the daemon
 
 ## `minideploy completion`
 
