@@ -49,7 +49,7 @@ In `.vscode/settings.json`:
 ```json
 {
   "yaml.schemas": {
-    "https://raw.githubusercontent.com/<your-repo>/main/deploy-schema.json": [
+    "https://raw.githubusercontent.com/hamidriaz1998/minideploy/main/deploy-schema.json": [
       ".deploy.yml"
     ]
   }
@@ -59,7 +59,7 @@ In `.vscode/settings.json`:
 Or add this comment at the top of your `.deploy.yml`:
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/<your-repo>/main/deploy-schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/hamidriaz1998/minideploy/main/deploy-schema.json
 ```
 </details>
 
@@ -71,7 +71,7 @@ require('lspconfig').yamlls.setup({
   settings = {
     yaml = {
       schemas = {
-        ["https://raw.githubusercontent.com/<your-repo>/main/deploy-schema.json"] = ".deploy.yml",
+        ["https://raw.githubusercontent.com/hamidriaz1998/minideploy/main/deploy-schema.json"] = ".deploy.yml",
       },
     },
   },
@@ -84,11 +84,11 @@ require('lspconfig').yamlls.setup({
 
 1. Open **Settings → Languages & Frameworks → Schemas and DTDs → JSON Schema Mappings**
 2. Add a mapping:
-   - **Schema file or URL**: `https://raw.githubusercontent.com/<your-repo>/main/deploy-schema.json`
+   - **Schema file or URL**: `https://raw.githubusercontent.com/hamidriaz1998/minideploy/main/deploy-schema.json`
    - **File path pattern**: `.deploy.yml`
 </details>
 
-Replace `<your-repo>` with the actual repository URL after pushing.
+The URL points to the `main` branch on GitHub — adjust if you're using a different branch.
 
 ### 3. Deploy
 

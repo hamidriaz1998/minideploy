@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/<your-repo>/main/deploy-schema.json",
+  "$id": "https://raw.githubusercontent.com/hamidriaz1998/minideploy/main/deploy-schema.json",
   "title": "minideploy Configuration",
   "description": "Schema for minideploy .deploy.yml files",
   "type": "object",

@@ -21,6 +21,7 @@ minideploy is a single binary with subcommands. Use `minideploy --help` to list 
 | `create-key` | Create a scoped API key |
 | `delete-key` | Delete an API key |
 | `keys` | List all API keys |
+| `completion` | Generate shell completion scripts |
 
 ## Global Flags
 
@@ -506,3 +507,34 @@ The command:
 7. Generates and displays an API key
 8. Saves the admin key to `~/.config/minideploy/config.yml`
 9. Starts the daemon
+
+## `minideploy completion`
+
+Generate shell completion scripts for bash, zsh, fish, or PowerShell.
+
+```
+minideploy completion <shell>
+```
+
+| Argument | Description |
+|---|---|
+| `bash` | Bash completions |
+| `zsh` | Zsh completions |
+| `fish` | Fish completions |
+| `powershell` | PowerShell completions |
+
+**Examples**:
+
+```bash
+# Bash — install permanently
+minideploy completion bash | sudo tee /etc/bash_completion.d/minideploy
+
+# Zsh — install permanently (create the directory if needed)
+minideploy completion zsh | sudo tee /usr/local/share/zsh/site-functions/_minideploy
+
+# Fish — install permanently
+minideploy completion fish | sudo tee /etc/fish/completions/minideploy.fish
+
+# Or source directly in your current shell
+source <(minideploy completion bash)
+```

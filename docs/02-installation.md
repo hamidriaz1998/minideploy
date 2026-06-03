@@ -10,7 +10,7 @@
 ## Building from Source
 
 ```bash
-git clone <your-repo> && cd minideploy
+git clone git@github.com:hamidriaz1998/minideploy.git && cd minideploy
 make build
 ```
 

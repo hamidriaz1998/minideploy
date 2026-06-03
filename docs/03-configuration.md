@@ -190,7 +190,7 @@ A [JSON Schema file](../deploy-schema.json) is provided for autocompletion and v
 ```json
 {
   "yaml.schemas": {
-    "https://raw.githubusercontent.com/<your-repo>/main/deploy-schema.json": [".deploy.yml"]
+    "https://raw.githubusercontent.com/hamidriaz1998/minideploy/main/deploy-schema.json": [".deploy.yml"]
   }
 }
 ```
@@ -198,7 +198,7 @@ A [JSON Schema file](../deploy-schema.json) is provided for autocompletion and v
 **Or** add this comment to the top of `.deploy.yml`:
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/<your-repo>/main/deploy-schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/hamidriaz1998/minideploy/main/deploy-schema.json
 ```
 
-Replace `<your-repo>` with the actual repository URL.
+The URL points to the `main` branch — adjust if you're using a different branch.
