@@ -152,3 +152,25 @@ The config loader enforces these rules:
 | `server.api_port` | Defaults to `8443` |
 | `build` | At least one step required |
 | `artifacts` | At least one artifact required |
+
+## IDE Integration (JSON Schema)
+
+A [JSON Schema file](../deploy-schema.json) is provided for autocompletion and validation in YAML-aware editors.
+
+**VS Code** — add to `.vscode/settings.json`:
+
+```json
+{
+  "yaml.schemas": {
+    "https://raw.githubusercontent.com/<your-repo>/main/deploy-schema.json": [".deploy.yml"]
+  }
+}
+```
+
+**Or** add this comment to the top of `.deploy.yml`:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/<your-repo>/main/deploy-schema.json
+```
+
+Replace `<your-repo>` with the actual repository URL.

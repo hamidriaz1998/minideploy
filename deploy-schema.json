@@ -1,0 +1,170 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/<your-repo>/main/deploy-schema.json",
+  "title": "minideploy Configuration",
+  "description": "Schema for minideploy .deploy.yml files",
+  "type": "object",
+  "required": [
+    "app_name",
+    "service_type",
+    "service_name",
+    "deploy_path",
+    "build",
+    "artifacts",
+    "server"
+  ],
+  "properties": {
+    "app_name": {
+      "description": "Name of your application. Used for state tracking and log messages.",
+      "type": "string",
+      "examples": ["my-api"]
+    },
+    "service_type": {
+      "description": "Process manager type. Determines how services are restarted.",
+      "type": "string",
+      "enum": ["systemd", "pm2"],
+      "examples": ["systemd"]
+    },
+    "service_name": {
+      "description": "Service name pattern. Use %i as placeholder for instance ID.\nFor systemd: maps to unit names like 'my-api@3000.service'\nFor pm2: maps to pm2 app names like 'my-api-3000'",
+      "type": "string",
+      "examples": ["my-api@%i", "my-api-%i"]
+    },
+    "instances": {
+      "description": "List of service instances to manage. Each instance gets its own port and env vars.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "port"],
+        "properties": {
+          "id": {
+            "description": "Instance identifier. Replaces %i in service_name.",
+            "type": "string",
+            "examples": ["3000", "3001"]
+          },
+          "port": {
+            "description": "Port number this instance listens on.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535,
+            "examples": [3000, 3001]
+          },
+          "env": {
+            "description": "Instance-specific environment variables.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "examples": [{ "PORT": "3000" }]
+          }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "deploy_path": {
+      "description": "Base path on the server where releases are stored. The daemon creates upload/, releases/, and current/ under this path.",
+      "type": "string",
+      "examples": ["/opt/my-api", "/srv/my-app"]
+    },
+    "build": {
+      "description": "Build steps executed sequentially on the dev machine. Each step runs via 'sh -c <step>'. Fails on first non-zero exit.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "examples": [
+        ["go build -o app ."],
+        ["npm ci", "npm run build"],
+        ["dotnet publish -c Release -o publish"]
+      ]
+    },
+    "artifacts": {
+      "description": "Files and directories to upload to the server via rsync. Paths are relative to the project root.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "examples": [
+        ["app"],
+        ["server.js", "package.json", "node_modules/"],
+        ["publish/"]
+      ]
+    },
+    "server": {
+      "description": "Server connection information.",
+      "type": "object",
+      "required": ["host"],
+      "properties": {
+        "host": {
+          "description": "Server hostname or IP address. If a hostname that doesn't resolve via DNS, ~/.ssh/config is read for HostName.",
+          "type": "string",
+          "examples": ["my-vps", "203.0.113.42"]
+        },
+        "api_port": {
+          "description": "Port the daemon API listens on (default: 8443).",
+          "type": "integer",
+          "default": 8443,
+          "minimum": 1,
+          "maximum": 65535,
+          "examples": [8443]
+        },
+        "ssh_user": {
+          "description": "SSH user for rsync connections.",
+          "type": "string",
+          "default": "root",
+          "examples": ["root", "deploy"]
+        },
+        "api_key": {
+          "description": "API key for authenticating with the daemon. Optional — can be set via MINIDEPLOY_API_KEY env var or .env file instead.",
+          "type": "string",
+          "examples": ["sk-abc123def456..."]
+        }
+      },
+      "additionalProperties": false
+    },
+    "env": {
+      "description": "Global environment variables passed to all instances. Merged with (and overridable by) instance-specific env.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "examples": [{ "NODE_ENV": "production", "LOG_LEVEL": "info" }]
+    },
+    "pre_deploy": {
+      "description": "Hooks run on the server AFTER the symlink swap but BEFORE the service restart. (Future feature — reserved.)",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "cmd": {
+            "description": "Command to execute.",
+            "type": "string",
+            "examples": ["make migrate", "php artisan cache:clear"]
+          }
+        },
+        "required": ["cmd"],
+        "additionalProperties": false
+      }
+    },
+    "post_deploy": {
+      "description": "Hooks run on the server AFTER the service restart. (Future feature — reserved.)",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "cmd": {
+            "description": "Command to execute.",
+            "type": "string",
+            "examples": ["make warmup", "curl http://localhost/health"]
+          }
+        },
+        "required": ["cmd"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

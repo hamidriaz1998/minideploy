@@ -39,6 +39,57 @@ See `.deploy.yml.example` for a full reference. Or generate one interactively:
 minideploy init
 ```
 
+For IDE autocompletion and validation, add the [JSON Schema](deploy-schema.json) to your editor:
+
+<details>
+<summary><b>VS Code / Cursor / Windsurf</b></summary>
+
+In `.vscode/settings.json`:
+
+```json
+{
+  "yaml.schemas": {
+    "https://raw.githubusercontent.com/<your-repo>/main/deploy-schema.json": [
+      ".deploy.yml"
+    ]
+  }
+}
+```
+
+Or add this comment at the top of your `.deploy.yml`:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/<your-repo>/main/deploy-schema.json
+```
+</details>
+
+<details>
+<summary><b>Neovim (with lspconfig + yamlls)</b></summary>
+
+```lua
+require('lspconfig').yamlls.setup({
+  settings = {
+    yaml = {
+      schemas = {
+        ["https://raw.githubusercontent.com/<your-repo>/main/deploy-schema.json"] = ".deploy.yml",
+      },
+    },
+  },
+})
+```
+</details>
+
+<details>
+<summary><b>IntelliJ IDEA / JetBrains</b></summary>
+
+1. Open **Settings → Languages & Frameworks → Schemas and DTDs → JSON Schema Mappings**
+2. Add a mapping:
+   - **Schema file or URL**: `https://raw.githubusercontent.com/<your-repo>/main/deploy-schema.json`
+   - **File path pattern**: `.deploy.yml`
+</details>
+
+Replace `<your-repo>` with the actual repository URL after pushing.
+
 ### 3. Deploy
 
 ```bash
