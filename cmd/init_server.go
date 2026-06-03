@@ -70,6 +70,7 @@ var initServerCmd = &cobra.Command{
 		fmt.Sprintf("id -u minideploy 2>/dev/null || sudo useradd --system --no-create-home --shell /sbin/nologin minideploy"),
 		fmt.Sprintf("sudo mkdir -p %s/upload %s/releases %s", deployPath, deployPath, stateDir),
 		fmt.Sprintf("sudo chown -R minideploy:minideploy %s %s", deployPath, stateDir),
+		fmt.Sprintf("sudo chmod 1777 %s/upload", deployPath),
 	}
 
 	fmt.Println("[init] setting up directories and user...")

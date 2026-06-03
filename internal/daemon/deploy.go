@@ -166,6 +166,12 @@ func EnsureDeployDir(deployPath string) error {
 			return fmt.Errorf("create dir %s: %w", d, err)
 		}
 	}
+	// upload/ must be world-writable so the SSH user can rsync into it.
+	// Force permissions explicitly (bypass umask).
+	uploadDir := filepath.Join(deployPath, "upload")
+	if err := os.Chmod(uploadDir, 0777); err != nil {
+		return fmt.Errorf("chmod upload: %w", err)
+	}
 	return nil
 }
 
