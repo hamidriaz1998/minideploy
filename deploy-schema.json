@@ -133,6 +133,47 @@
       },
       "examples": [{ "NODE_ENV": "production", "LOG_LEVEL": "info" }]
     },
+    "keep_releases": {
+      "description": "Number of old releases to keep on disk (0 = keep all). Oldest releases are pruned after a successful deploy.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "examples": [5]
+    },
+    "health_check": {
+      "description": "Health check configuration for zero-downtime verification. If configured, the daemon HTTP GETs each instance after restart and auto-rollbacks on failure.",
+      "type": "object",
+      "properties": {
+        "endpoint": {
+          "description": "HTTP path to check on each instance (e.g. /health).",
+          "type": "string",
+          "examples": ["/health", "/api/health"]
+        },
+        "timeout": {
+          "description": "Seconds to wait per health check request.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 10,
+          "examples": [10]
+        },
+        "retries": {
+          "description": "Number of retries per instance before marking failed.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 3,
+          "examples": [3]
+        },
+        "wait_between_instances": {
+          "description": "Seconds to wait between checking each instance.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "examples": [1]
+        }
+      },
+      "required": ["endpoint"],
+      "additionalProperties": false
+    },
     "pre_deploy": {
       "description": "Hooks run on the server AFTER the symlink swap but BEFORE the service restart. (Future feature — reserved.)",
       "type": "array",
