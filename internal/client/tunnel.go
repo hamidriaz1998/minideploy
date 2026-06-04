@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"time"
 )
 
@@ -46,6 +47,16 @@ func StartTunnel(host string, sshUser string, remotePort int, localPort int) (*T
 		host:   host,
 		remote: remotePort,
 	}, nil
+}
+
+func IsPortOpen(host string, port int) bool {
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
+	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
 }
 
 func (t *Tunnel) Close() error {

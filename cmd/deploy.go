@@ -69,7 +69,8 @@ var deployCmd = &cobra.Command{
 		}
 
 		host := cfg.Server.Host
-		if client.NeedsTunnel(host) {
+		if client.NeedsTunnel(host) && !client.IsPortOpen("127.0.0.1", cfg.Server.APIPort) {
+			shared.Debug("no daemon reachable on localhost:%d, starting ssh tunnel", cfg.Server.APIPort)
 			apiClient := client.NewAPIClient("127.0.0.1", cfg.Server.APIPort, cfg.Server.APIKey)
 			tunnel, err := client.StartTunnel(host, cfg.Server.SSHUser, cfg.Server.APIPort, cfg.Server.APIPort)
 			if err != nil {
@@ -78,6 +79,10 @@ var deployCmd = &cobra.Command{
 			defer tunnel.Close()
 
 			shared.Debug("ssh tunnel established to %s", host)
+			doDeploy(apiClient, cfg, releaseName)
+		} else if client.NeedsTunnel(host) {
+			shared.Debug("tunnel or local daemon already running on 127.0.0.1:%d", cfg.Server.APIPort)
+			apiClient := client.NewAPIClient("127.0.0.1", cfg.Server.APIPort, cfg.Server.APIKey)
 			doDeploy(apiClient, cfg, releaseName)
 		} else {
 			apiClient := client.NewAPIClient(host, cfg.Server.APIPort, cfg.Server.APIKey)

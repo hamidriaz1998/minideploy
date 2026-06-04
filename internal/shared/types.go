@@ -114,7 +114,7 @@ type DeployRequest struct {
 	Instances    []Instance  `json:"instances,omitempty"`
 	DeployPath   string      `json:"deploy_path,omitempty"`
 	KeepReleases int         `json:"keep_releases"`
-	HealthCheck  HealthCheck `json:"health_check,omitempty"`
+	HealthCheck  HealthCheck `json:"health_check"`
 }
 
 type DeployResponse struct {
@@ -151,11 +151,11 @@ type DiskUsage struct {
 }
 
 type AppSummary struct {
-	Name            string `json:"name"`
-	ServiceType     string `json:"service_type"`
-	CurrentRelease  string `json:"current_release"`
-	InstancesCount  int    `json:"instances_count"`
-	Running         bool   `json:"running"`
+	Name           string `json:"name"`
+	ServiceType    string `json:"service_type"`
+	CurrentRelease string `json:"current_release"`
+	InstancesCount int    `json:"instances_count"`
+	Running        bool   `json:"running"`
 }
 
 type AppDetail struct {
