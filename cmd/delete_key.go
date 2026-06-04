@@ -25,14 +25,23 @@ var deleteKeyCmd = &cobra.Command{
 		port, _ := cmd.Flags().GetInt("port")
 		apiKey, _ := cmd.Flags().GetString("api-key")
 
+		if host == "" {
+			if cfg, err := client.LoadConfig(".deploy.yml"); err == nil {
+				host = cfg.Server.Host
+			}
+		}
+		if host == "" {
+			shared.Fatal("use --host to specify the daemon host (or add server.host to .deploy.yml)")
+		}
+
 		if apiKey == "" {
-			apiKey = client.GetAdminKey()
+			apiKey = client.GetAdminKey(host)
 		}
 		if apiKey == "" {
 			apiKey = os.Getenv("MINIDEPLOY_API_KEY")
 		}
 		if apiKey == "" {
-			shared.Fatal("no admin API key found")
+			shared.Fatal("no admin API key found for %s", host)
 		}
 
 		cfg := resolveServerConfig(host, port, apiKey)
@@ -51,7 +60,7 @@ var deleteKeyCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(deleteKeyCmd)
-	deleteKeyCmd.Flags().StringP("host", "H", "127.0.0.1", "daemon host")
+	deleteKeyCmd.Flags().StringP("host", "H", "", "daemon host (default: from .deploy.yml)")
 	deleteKeyCmd.Flags().IntP("port", "p", 8443, "daemon port")
 	deleteKeyCmd.Flags().StringP("api-key", "k", "", "admin API key for authentication")
 }

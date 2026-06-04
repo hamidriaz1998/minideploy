@@ -205,8 +205,15 @@ minideploy ALL=(root) NOPASSWD: /usr/sbin/useradd *
 			}
 		}
 
-		shared.Info("saving admin key to global config...")
-		globalCfg := &client.GlobalConfig{AdminKey: rawKey}
+		shared.Info("saving admin key for host %s to global config...", host)
+		globalCfg, err := client.LoadGlobalConfig()
+		if err != nil {
+			globalCfg = &client.GlobalConfig{}
+		}
+		if globalCfg.Hosts == nil {
+			globalCfg.Hosts = make(map[string]client.HostConfig)
+		}
+		globalCfg.Hosts[host] = client.HostConfig{AdminKey: rawKey}
 		if err := client.SaveGlobalConfig(globalCfg); err != nil {
 			shared.Warn("could not save admin key to config: %v", err)
 		} else {

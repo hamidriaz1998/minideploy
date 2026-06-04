@@ -3,12 +3,13 @@
 minideploy is a single binary with subcommands. Use `minideploy --help` to list all commands.
 
 | Command | Description |
-|---|---|
+|---|---|---|
 | `deploy` | Build, upload, and deploy |
 | `build` | Run build steps only |
 | `upload` | Rsync artifacts only |
 | `rollback` | Rollback to a previous release |
 | `destroy` | Remove an app from the daemon |
+| `teardown` | Completely remove minideploy and apps from a server |
 | `status` | Daemon health information |
 | `ps` | List apps and running instances |
 | `releases` | List releases for an app |
@@ -159,6 +160,37 @@ $ minideploy destroy --soft --confirm
 
 # Specify app name explicitly
 $ minideploy destroy my-api --confirm
+```
+
+## `minideploy teardown`
+
+Completely remove minideploy and optionally its managed apps from a server via SSH.
+
+```
+minideploy teardown --host HOST [--ssh-user USER] [--apps APPS]
+```
+
+Does not require the daemon to be running. Scans the server for installed apps
+and removes them, then removes the minideploy binary, systemd service, state
+directory, sudoers, and the `minideploy` user.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--host` | from `.deploy.yml` | Server hostname or IP |
+| `--ssh-user` | `root` | SSH user |
+| `--apps` | `all` | Apps to remove: `"all"`, comma-separated list, or `""` to keep apps |
+
+**Examples**:
+
+```bash
+# Remove everything (minideploy + all apps)
+minideploy teardown --host my-vps
+
+# Remove only specific apps with minideploy
+minideploy teardown --host my-vps --apps "my-api,express-api"
+
+# Remove only minideploy, leave apps intact
+minideploy teardown --host my-vps --apps ""
 ```
 
 ## `minideploy status`
@@ -342,6 +374,8 @@ Get a stored config value.
 minideploy config get admin_key
 ```
 
+Returns the legacy top-level `admin_key` if set, or lists all host entries.
+
 ### `minideploy config set <key> <value>`
 
 Set a config value.
@@ -350,14 +384,19 @@ Set a config value.
 minideploy config set admin_key sk-abc123...
 ```
 
+**Note**: The recommended way to set per-host keys is via `init-server`, which
+automatically stores keys under the host name as a top-level key:
+
+```yaml
+my-vps:
+  admin_key: sk-abc123...
+```
+
 **Example**:
 
 ```bash
 $ minideploy config get admin_key
 sk-abc123def456...
-
-$ minideploy config set admin_key sk-newkey...
-config admin_key updated
 ```
 
 ## `minideploy create-key`
@@ -374,9 +413,9 @@ minideploy create-key [--scope SCOPE] [--app-name NAME] [--label LABEL]
 | `--scope` | `app` | Key scope: `global` or `app` |
 | `-a, --app-name` | `""` | App name (required for `--scope app`) |
 | `-l, --label` | `""` | Optional human-readable label |
-| `-H, --host` | `127.0.0.1` | Daemon host |
+| `-H, --host` | from `.deploy.yml` | Daemon host (required if no `.deploy.yml`) |
 | `-p, --port` | `8443` | Daemon API port |
-| `-k, --api-key` | config or env | Admin API key for authentication |
+| `-k, --api-key` | global config → env | Admin API key for authentication |
 
 **Global keys** have full access to all apps and all operations (deploy, destroy, key management).
 
@@ -409,12 +448,18 @@ Permanently delete an API key by its ID.
 minideploy delete-key <id> [--host HOST] [--port PORT] [--api-key KEY]
 ```
 
+| Flag | Default | Description |
+|---|---|---|
+| `-H, --host` | from `.deploy.yml` | Daemon host (required if no `.deploy.yml`) |
+| `-p, --port` | `8443` | Daemon API port |
+| `-k, --api-key` | global config → env | Admin API key for authentication |
+
 Use `minideploy keys` to find key IDs.
 
 **Example**:
 
 ```bash
-$ minideploy delete-key 2
+$ minideploy delete-key 2 --host my-vps
 Key 2 deleted
 ```
 
@@ -426,12 +471,19 @@ List all API keys registered with the daemon.
 minideploy keys [--host HOST] [--port PORT] [--api-key KEY]
 ```
 
-Shows the key ID, scope, associated app, label, and creation date.
+| Flag | Default | Description |
+|---|---|---|
+| `-H, --host` | from `.deploy.yml` | Daemon host (required if no `.deploy.yml`) |
+| `-p, --port` | `8443` | Daemon API port |
+| `-k, --api-key` | global config → env | Admin API key for authentication |
+
+The host is resolved from `.deploy.yml` first (if it exists in the current directory),
+then from the `--host` flag. If neither is available, the command errors out.
 
 **Example**:
 
 ```bash
-$ minideploy keys
+$ minideploy keys --host my-vps
 ID   Scope    App               Label                Created
 ---- -------- ---------------- -------------------- ------------
 1    global   (all)            initial key          2026-06-03
@@ -504,8 +556,16 @@ minideploy init-server [--host HOST] [--ssh-user USER] [--binary PATH] [--force]
 
 The SSH user must have **passwordless sudo** access — `init-server` uses `sudo` for all privileged operations (installing the binary, writing systemd units, creating users, running systemctl).
 
-The admin API key is automatically saved to `~/.config/minideploy/config.yml` so
-you can immediately run admin commands like `create-key` without passing `--api-key`.
+The admin API key is automatically saved to `~/.config/minideploy/config.yml` under
+a host-specific key so you can manage multiple servers without overwriting keys:
+
+```yaml
+# ~/.config/minideploy/config.yml
+my-vps:
+  admin_key: a1b2c3d4e5f6... (64 hex chars)
+```
+
+You can then run admin commands like `create-key` without passing `--api-key`.
 
 **Auto-detection from `.deploy.yml`**: If `.deploy.yml` exists in the current directory,
 `init-server` automatically pulls `server.host` and `server.ssh_user` from it.
@@ -588,7 +648,7 @@ Run this after `minideploy init-server` for each app you want to deploy. It:
 minideploy init-app
 ```
 
-The API key is resolved from: `--api-key` flag → `~/.config/minideploy/config.yml` (set by `init-server`) → `MINIDEPLOY_API_KEY` env var.
+The API key is resolved from: `--api-key` flag → host-specific key in `~/.config/minideploy/config.yml` (set by `init-server`) → `MINIDEPLOY_API_KEY` env var.
 
 | Flag | Default | Description |
 |---|---|---|

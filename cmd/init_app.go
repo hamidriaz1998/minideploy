@@ -67,7 +67,7 @@ The daemon SSH tunnel is managed automatically.`,
 
 		// Resolve API key from flag, global config, or env
 		if apiKey == "" {
-			apiKey = client.GetAdminKey()
+			apiKey = client.GetAdminKey(host)
 		}
 		if apiKey == "" {
 			apiKey = os.Getenv("MINIDEPLOY_API_KEY")

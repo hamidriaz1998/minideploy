@@ -24,14 +24,23 @@ status/logs for a single app.`,
 		appName, _ := cmd.Flags().GetString("app-name")
 		label, _ := cmd.Flags().GetString("label")
 
+		if host == "" {
+			if cfg, err := client.LoadConfig(".deploy.yml"); err == nil {
+				host = cfg.Server.Host
+			}
+		}
+		if host == "" {
+			shared.Fatal("use --host to specify the daemon host (or add server.host to .deploy.yml)")
+		}
+
 		if apiKey == "" {
-			apiKey = client.GetAdminKey()
+			apiKey = client.GetAdminKey(host)
 		}
 		if apiKey == "" {
 			apiKey = os.Getenv("MINIDEPLOY_API_KEY")
 		}
 		if apiKey == "" {
-			shared.Fatal("no admin API key found (set --api-key, MINIDEPLOY_API_KEY, or admin_key in config)")
+			shared.Fatal("no admin API key found for %s (set --api-key, MINIDEPLOY_API_KEY, or run init-server)", host)
 		}
 
 		cfg := resolveServerConfig(host, port, apiKey)
@@ -62,7 +71,7 @@ status/logs for a single app.`,
 
 func init() {
 	rootCmd.AddCommand(createKeyCmd)
-	createKeyCmd.Flags().StringP("host", "H", "127.0.0.1", "daemon host")
+	createKeyCmd.Flags().StringP("host", "H", "", "daemon host (default: from .deploy.yml)")
 	createKeyCmd.Flags().IntP("port", "p", 8443, "daemon port")
 	createKeyCmd.Flags().StringP("api-key", "k", "", "admin API key for authentication")
 	createKeyCmd.Flags().String("scope", "app", "key scope (global or app)")

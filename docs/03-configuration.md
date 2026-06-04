@@ -109,6 +109,7 @@ The API key for deploy/status/logs operations is resolved in this priority order
 | 1 | `server.api_key` in `.deploy.yml` | `api_key: sk-abc123...` |
 | 2 | `MINIDEPLOY_API_KEY` env var | `export MINIDEPLOY_API_KEY=sk-abc...` |
 | 3 | `.env` file in project root | `MINIDEPLOY_API_KEY=sk-abc...` |
+| 4 | Host-specific key in global config | `~/.config/minideploy/config.yml` → `Hosts[server.host]` |
 
 For admin operations (key management, destroy), the key is resolved as:
 
@@ -116,7 +117,8 @@ For admin operations (key management, destroy), the key is resolved as:
 |---|---|---|
 | 1 | `--api-key` flag | `--api-key sk-abc123...` |
 | 2 | `MINIDEPLOY_API_KEY` env var | `export MINIDEPLOY_API_KEY=sk-abc...` |
-| 3 | `~/.config/minideploy/config.yml` → `admin_key` | (set via `init-server` or `config set admin_key`) |
+| 3 | Host-specific key in global config | `~/.config/minideploy/config.yml` → `Hosts[host]` |
+| 4 | Legacy `admin_key` in global config | (written by older versions) |
 
 This means you can commit `.deploy.yml` without secrets by:
 
@@ -130,22 +132,30 @@ export MINIDEPLOY_API_KEY=sk-abc123def456...
 
 ## Global Client Config
 
-minideploy stores your admin API key in a global config file at `~/.config/minideploy/config.yml`:
+minideploy stores per-host API keys in a global config file at `~/.config/minideploy/config.yml`:
 
 ```yaml
-admin_key: sk-abc123def456...
+my-vps:
+  admin_key: sk-abc123def456...
+test-vm:
+  admin_key: sk-789def...
 ```
 
-This is automatically populated by `minideploy init-server` and used as a fallback for admin operations like `create-key`, `delete-key`, `keys`, `rotate-key`, and `destroy`.
-
-You can manage it manually:
+Each host gets its own top-level key, set automatically by `init-server`:
 
 ```bash
-# View the stored admin key
-minideploy config get admin_key
+minideploy init-server --host my-vps    # writes my-vps.admin_key
+minideploy init-server --host test-vm   # writes test-vm.admin_key (no overwrite)
+```
 
-# Update it
-minideploy config set admin_key sk-newkey...
+The key for a host is used as a fallback for `deploy`, `status`, `logs`, and admin operations like `create-key`, `delete-key`, and `keys`.
+
+For key management commands (`keys`, `create-key`, `delete-key`), the host is resolved from `.deploy.yml` first, then from the `--host` flag. If neither is set, the command errors out with instructions.
+
+You can view the raw key:
+
+```bash
+minideploy config get admin_key
 ```
 
 ## SSH Configuration

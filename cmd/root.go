@@ -48,7 +48,7 @@ func resolveServerConfig(host string, port int, apiKey string) *client.Config {
 		cfg.Server.APIKey = os.Getenv("MINIDEPLOY_API_KEY")
 	}
 	if cfg.Server.APIKey == "" {
-		cfg.Server.APIKey = client.GetAdminKey()
+		cfg.Server.APIKey = client.GetAdminKey(cfg.Server.Host)
 	}
 
 	return cfg

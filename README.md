@@ -10,7 +10,7 @@ A single-binary tool for deploying applications to a VPS with zero-downtime syml
 minideploy init-server --host my-vps --ssh-user root
 ```
 
-This cross-compiles the daemon, SCPs it to your server, creates a `minideploy` system user, installs a systemd service for the daemon, configures sudoers, and generates an API key. Then run `minideploy init-app` for each app.
+This cross-compiles the daemon, SCPs it to your server, creates a `minideploy` system user, installs a systemd service for the daemon, configures sudoers, and generates an API key (stored per-host in `~/.config/minideploy/config.yml`). Then run `minideploy init-app` for each app.
 
 ### 2. Create a `.deploy.yml` in your project
 
@@ -111,12 +111,13 @@ This runs your build steps, rsyncs artifacts to `/opt/my-api/upload/`, and tells
 ## CLI Reference
 
 | Command | Description |
-|---|---|
+|---|---|---|
 | `deploy` | Full pipeline: build → upload → deploy |
 | `build` | Run build steps only |
 | `upload` | Rsync artifacts only |
 | `rollback [release]` | Rollback to a previous or specified release |
 | `destroy [app]` | Remove an app (soft or hard) |
+| `teardown` | Completely remove minideploy and apps from a server |
 | `status` | Daemon health check |
 | `ps` | List running apps and instances |
 | `releases [app]` | List releases for an app |
@@ -178,5 +179,12 @@ Priority (highest to lowest):
 1. `server.api_key` in `.deploy.yml`
 2. `MINIDEPLOY_API_KEY` environment variable
 3. `MINIDEPLOY_API_KEY` in `.env` file in project root
+4. Host-specific key in `~/.config/minideploy/config.yml` (set by `init-server`)
 
-This lets you commit `.deploy.yml` without exposing secrets.
+This lets you commit `.deploy.yml` without exposing secrets. The global config stores keys per host:
+
+```yaml
+# ~/.config/minideploy/config.yml
+my-vps:
+  admin_key: sk-abc123...
+```

@@ -13,8 +13,58 @@ import (
 
 type Config = shared.Config
 
-type GlobalConfig struct {
+type HostConfig struct {
 	AdminKey string `yaml:"admin_key"`
+}
+
+type GlobalConfig struct {
+	AdminKey string
+	Hosts    map[string]HostConfig
+}
+
+func (cfg *GlobalConfig) MarshalYAML() (interface{}, error) {
+	node := &yaml.Node{Kind: yaml.MappingNode}
+	if cfg.AdminKey != "" {
+		node.Content = append(node.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Value: "admin_key"},
+			&yaml.Node{Kind: yaml.ScalarNode, Value: cfg.AdminKey},
+		)
+	}
+	for host, hc := range cfg.Hosts {
+		hcNode := &yaml.Node{Kind: yaml.MappingNode}
+		hcNode.Content = append(hcNode.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Value: "admin_key"},
+			&yaml.Node{Kind: yaml.ScalarNode, Value: hc.AdminKey},
+		)
+		node.Content = append(node.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Value: host},
+			hcNode,
+		)
+	}
+	return node, nil
+}
+
+func (cfg *GlobalConfig) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind != yaml.MappingNode {
+		return fmt.Errorf("expected mapping node")
+	}
+	for i := 0; i < len(value.Content); i += 2 {
+		key := value.Content[i].Value
+		valNode := value.Content[i+1]
+		if key == "admin_key" {
+			cfg.AdminKey = valNode.Value
+			continue
+		}
+		var hc HostConfig
+		if err := valNode.Decode(&hc); err != nil {
+			return err
+		}
+		if cfg.Hosts == nil {
+			cfg.Hosts = make(map[string]HostConfig)
+		}
+		cfg.Hosts[key] = hc
+	}
+	return nil
 }
 
 func GlobalConfigPath() string {
@@ -56,12 +106,20 @@ func SaveGlobalConfig(cfg *GlobalConfig) error {
 	return nil
 }
 
-func GetAdminKey() string {
+func GetAdminKey(host string) string {
 	cfg, err := LoadGlobalConfig()
-	if err != nil || cfg.AdminKey == "" {
-		return os.Getenv("MINIDEPLOY_ADMIN_KEY")
+	if err != nil {
+		return ""
 	}
-	return cfg.AdminKey
+	if host != "" && cfg.Hosts != nil {
+		if hc, ok := cfg.Hosts[host]; ok && hc.AdminKey != "" {
+			return hc.AdminKey
+		}
+	}
+	if cfg.AdminKey != "" {
+		return cfg.AdminKey
+	}
+	return os.Getenv("MINIDEPLOY_ADMIN_KEY")
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -111,6 +169,10 @@ func resolveAPIKey(cfg *Config) {
 		return
 	}
 	if key := readEnvFile(".env"); key != "" {
+		cfg.Server.APIKey = key
+		return
+	}
+	if key := GetAdminKey(cfg.Server.Host); key != "" {
 		cfg.Server.APIKey = key
 		return
 	}
