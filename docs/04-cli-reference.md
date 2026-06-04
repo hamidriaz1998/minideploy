@@ -15,7 +15,8 @@ minideploy is a single binary with subcommands. Use `minideploy --help` to list 
 | `logs` | Fetch app logs |
 | `init` | Generate `.deploy.yml` |
 | `init-server` | Bootstrap daemon on a VPS |
-| `daemon` | Start the daemon |
+| `daemon` | Start the daemon (and subcommands: `daemon import-key`) |
+| `import-key` | Import a bcrypt key hash into the daemon database (used internally by `init-server`) |
 | `rotate-key` | Generate a new API key |
 | `config` | Manage global config (`get`/`set`) |
 | `create-key` | Create a scoped API key |
@@ -274,9 +275,23 @@ minideploy daemon [--port PORT] [--state-dir DIR]
 
 The daemon:
 - Listens on `127.0.0.1:<port>` (localhost only)
-- Generates an API key on first start if none exists
-- Persists app state to `state.json` in the state directory
+- Generates an API key on first start **only if** none exists in the database (fallback for manual setups)
+- Persists app state to the SQLite database in the state directory
 - Requires `sudo` access for process manager commands
+
+## `minideploy daemon import-key <hash>`
+
+Low-level command to directly insert an API key hash into the daemon's SQLite database. Used internally by `init-server` to pre-seed the admin key before the daemon starts.
+
+```
+minideploy daemon import-key <hash> [--state-dir DIR]
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `-d, --state-dir` | `/var/lib/minideploy` | State directory for the daemon database |
+
+Runs as a one-shot operation (no HTTP server). Opens the SQLite DB, inserts the key hash, and exits. The daemon will find the key on startup and skip auto-generation.
 
 ## `minideploy rotate-key`
 
@@ -483,7 +498,7 @@ npm run build --prefix frontend
 Bootstrap the minideploy daemon on a fresh VPS.
 
 ```
-minideploy init-server [--host HOST] [--ssh-user USER] [--app-name NAME] [--deploy-path PATH] [--binary PATH] [--skip-bin-upload]
+minideploy init-server [--host HOST] [--ssh-user USER] [--app-name NAME] [--deploy-path PATH] [--binary PATH] [--force]
 ```
 
 The SSH user must have **passwordless sudo** access — `init-server` uses `sudo` for all privileged operations (installing the binary, writing systemd units, creating users, running systemctl).
@@ -500,7 +515,7 @@ minideploy init-server
 CLI flags still take priority over values from `.deploy.yml`.
 
 **Auto-detection of existing binary**: If `/usr/local/bin/minideploy` already exists on the
-remote, `init-server` skips the SCP and install steps (unless `--skip-bin-upload` is set).
+remote, `init-server` skips the SCP and install steps (use `--force` to upload anyway).
 
 **Output**:
 
@@ -535,7 +550,7 @@ remote, `init-server` skips the SCP and install steps (unless `--skip-bin-upload
 | `--app-name` | `my-app` | Default app name to create directories for |
 | `--deploy-path` | `/opt/<app-name>` | Deploy path on server |
 | `-b, --binary` | running binary | Path to minideploy binary to upload |
-| `--skip-bin-upload` | `false` | Skip binary upload (use existing `/usr/local/bin/minideploy`) |
+| `--force` | `false` | Force binary upload even if already installed |
 
 By default, the running binary (`os.Executable()`) is uploaded to the server. Use `--binary /path/to/minideploy` to upload a different version.
 
@@ -548,8 +563,9 @@ The command:
 6. Installs a systemd service for the daemon
 7. Configures sudoers for the `minideploy` user
 8. Generates and displays an API key
-9. Saves the admin key to `~/.config/minideploy/config.yml`
-10. Starts the daemon
+9. Seeds the bcrypt hash of the key into the daemon's SQLite database
+10. Saves the admin key to `~/.config/minideploy/config.yml`
+11. Starts the daemon
 
 ## `minideploy completion`
 

@@ -124,3 +124,13 @@ func (sm *StateManager) RotateKey(hash string, revokeOld bool) (int, error) {
 func (sm *StateManager) Close() error {
 	return sm.db.Close()
 }
+
+func SeedKey(stateDir, hash string) error {
+	db, err := openDB(stateDir)
+	if err != nil {
+		return fmt.Errorf("open db: %w", err)
+	}
+	defer db.Close()
+	q := newDBQueries(db)
+	return q.AddAPIKey(hash, "global", "", "init-server")
+}

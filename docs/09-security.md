@@ -6,7 +6,7 @@
 
 minideploy uses a pre-shared API key for all daemon communication (except the `/health` endpoint).
 
-1. **Generation**: `init-server` (or the daemon on first start) generates a 64-character hex string from `crypto/rand`
+1. **Generation**: `init-server` generates a 64-character hex string from `crypto/rand` and seeds the bcrypt hash into the daemon's database before starting it. If no key exists in the database when the daemon starts, it will generate one as a fallback.
 2. **Storage**: The key is bcrypt-hashed and stored in the `api_keys` table of the SQLite database at `/var/lib/minideploy/minideploy.db`
 3. **Transmission**: The client sends it as a `Bearer` token in the `Authorization` header
 4. **Verification**: The daemon uses `bcrypt.CompareHashAndPassword` on every request
@@ -14,20 +14,27 @@ minideploy uses a pre-shared API key for all daemon communication (except the `/
 ### Key Distribution
 
 ```
-init-server                          User
-    │                                  │
-    ├── Generate key ──────────────────┤
-    ├── Store bcrypt hash              │
-    └── Print raw key ────────────────►│
-                                       ├── Save to .deploy.yml
-                                       ├── Save to .env (gitignored)
-                                       └── Or export as env var
+init-server                          Daemon DB                          User
+    │                                  │                                  │
+    ├── Generate key ──────────────────┤                                  │
+    ├── Seed bcrypt hash ─────────────►│                                  │
+    ├── (stored in sqlite)             │                                  │
+    ├── Print raw key ────────────────┤──────────────────────────────────►│
+    │                                                                     │
+    │                           raw key                                  │
+    ├── Save raw key ───────────────────────────────────────────────────► │
+    │   (~/.config/minideploy/config.yml)                                 │
+    │                                                                     │
+    │                                                                     │
+    │                        ┌── Save to .deploy.yml                     │
+    │                        ├── Save to .env (gitignored)               │
+    │                        └── Or export as env var                    │
 ```
 
 The raw key is printed **once** during setup. If lost, you can:
 
-- Check daemon logs on first start: `journalctl -u minideploy | grep "Generated one-time key"`
 - Use the admin key stored in `~/.config/minideploy/config.yml` (set by `init-server`)
+- Check daemon logs on first start (fallback): `journalctl -u minideploy | grep "Generated one-time key"`
 - Create a new key with `minideploy create-key --scope global` (if you have another admin key)
 
 ### Key Scoping

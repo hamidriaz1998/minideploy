@@ -57,7 +57,7 @@ This will:
 3. Create the directory structure (`/opt/<app>/upload`, `releases`, `/var/lib/minideploy`)
 4. Set up a systemd service file at `/etc/systemd/system/minideploy.service`
 5. Configure sudoers for the `minideploy` user
-6. Generate an API key
+6. Generate an API key and seed its hash into the daemon database
 7. Start the daemon
 
 The admin API key is automatically saved to `~/.config/minideploy/config.yml` on your local machine.
@@ -167,7 +167,11 @@ If you prefer to set things up by hand:
 
 7. **Generate an API key**:
 
-   The daemon generates one automatically on first start. Check the logs:
+   ```bash
+   sudo -u minideploy /usr/local/bin/minideploy daemon import-key <bcrypt-hash>
+   ```
+
+   Or let the daemon generate one automatically on first start (fallback). Check the logs:
 
    ```bash
    sudo journalctl -u minideploy -n 20 --no-pager

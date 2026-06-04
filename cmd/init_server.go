@@ -32,11 +32,8 @@ var initServerCmd = &cobra.Command{
 		appName, _ := cmd.Flags().GetString("app-name")
 		deployPath, _ := cmd.Flags().GetString("deploy-path")
 		binaryPath, _ := cmd.Flags().GetString("binary")
-		skipBinUpload, _ := cmd.Flags().GetBool("skip-bin-upload")
+		forceUpload, _ := cmd.Flags().GetBool("force")
 
-		if host == "" {
-			shared.Fatal("--host is required (or add server.host to .deploy.yml)")
-		}
 		if sshUser == "" {
 			sshUser = "root"
 		}
@@ -81,14 +78,14 @@ var initServerCmd = &cobra.Command{
 		shared.Info("using binary: %s", binaryPath)
 
 		shared.Info("generating API key...")
-		rawKey, _, err := daemon.GenerateAPIKey()
+		rawKey, keyHash, err := daemon.GenerateAPIKey()
 		if err != nil {
 			shared.Fatal("generate key: %v", err)
 		}
 
 		stateDir := "/var/lib/minideploy"
 		preCommands := []string{
-			fmt.Sprintf("id -u minideploy 2>/dev/null || sudo useradd --system --no-create-home --shell /sbin/nologin minideploy"),
+			"id -u minideploy 2>/dev/null || sudo useradd --system --no-create-home --shell /sbin/nologin minideploy",
 			fmt.Sprintf("sudo mkdir -p %s/upload %s/releases %s", deployPath, deployPath, stateDir),
 			fmt.Sprintf("sudo chown -R minideploy:minideploy %s %s", deployPath, stateDir),
 			fmt.Sprintf("sudo chmod 1777 %s/upload", deployPath),
@@ -105,20 +102,19 @@ var initServerCmd = &cobra.Command{
 			}
 		}
 
-		// Check if binary already exists on remote
-		binaryExists := false
-		if !skipBinUpload {
+		// Check if binary already exists on remote (skip check if --force)
+		shouldUpload := forceUpload
+		if !shouldUpload {
 			shared.Debug("checking if minideploy binary exists on remote...")
 			checkBin := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host), "command -v minideploy")
-			if err := checkBin.Run(); err == nil {
+			if err := checkBin.Run(); err != nil {
+				shouldUpload = true
+			} else {
 				shared.Debug("binary already installed, skipping upload")
-				binaryExists = true
 			}
-		} else {
-			shared.Debug("skipping binary upload check (--skip-bin-upload)")
 		}
 
-		if !binaryExists {
+		if shouldUpload {
 			remoteTmp := "/tmp/minideploy"
 			shared.Info("uploading binary to %s@%s:%s...", sshUser, host, remoteTmp)
 			shared.Debug("scp %s %s@%s:%s", binaryPath, sshUser, host, remoteTmp)
@@ -174,14 +170,14 @@ WantedBy=multi-user.target
 		serviceStdin.Close()
 		writeService.Wait()
 
-		sudoersContent := fmt.Sprintf(`# minideploy daemon - managed process commands
+		sudoersContent := `# minideploy daemon - managed process commands
 minideploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart *
 minideploy ALL=(root) NOPASSWD: /usr/bin/systemctl status *
 minideploy ALL=(root) NOPASSWD: /usr/bin/systemctl start *
 minideploy ALL=(root) NOPASSWD: /usr/bin/systemctl stop *
 minideploy ALL=(root) NOPASSWD: /usr/bin/journalctl -u *
 minideploy ALL=(root) NOPASSWD: /usr/sbin/useradd *
-`)
+`
 		shared.Info("writing sudoers...")
 		writeSudoers := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host),
 			"sudo tee /etc/sudoers.d/minideploy > /dev/null")
@@ -192,6 +188,16 @@ minideploy ALL=(root) NOPASSWD: /usr/sbin/useradd *
 		sudoersStdin.Write([]byte(sudoersContent))
 		sudoersStdin.Close()
 		writeSudoers.Wait()
+
+		shared.Info("seeding API key into daemon database...")
+		seedCmd := fmt.Sprintf("sudo -u minideploy /usr/local/bin/minideploy daemon import-key --state-dir %s '%s'", stateDir, keyHash)
+		shared.Debug("running: %s", seedCmd)
+		seed := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host), seedCmd)
+		seed.Stdout = os.Stdout
+		seed.Stderr = os.Stderr
+		if err := seed.Run(); err != nil {
+			shared.Fatal("seed key failed: %v", err)
+		}
 
 		shared.Info("enabling and starting daemon...")
 		enableCmds := []string{
@@ -248,5 +254,5 @@ func init() {
 	initServerCmd.Flags().String("app-name", "my-app", "Default app name")
 	initServerCmd.Flags().String("deploy-path", "", "Deploy path on server (default: /opt/<app-name>)")
 	initServerCmd.Flags().StringP("binary", "b", "", "Path to minideploy binary to upload (default: the running binary)")
-	initServerCmd.Flags().Bool("skip-bin-upload", false, "Skip binary upload (use existing installation)")
+	initServerCmd.Flags().Bool("force", false, "Force binary upload even if already installed")
 }
