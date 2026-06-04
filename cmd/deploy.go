@@ -68,6 +68,17 @@ var deployCmd = &cobra.Command{
 			shared.Fatal("no API key configured (set server.api_key, MINIDEPLOY_API_KEY env, or .env)")
 		}
 
+		if cfg.Server.SSHUser == "" {
+			cfg.Server.SSHUser = "root"
+		}
+
+		if err := client.EnsureServiceTemplate(cfg); err != nil {
+			shared.Fatal("%v", err)
+		}
+		if err := client.EnsureEnvFiles(cfg); err != nil {
+			shared.Fatal("%v", err)
+		}
+
 		host := cfg.Server.Host
 		if client.NeedsTunnel(host) && !client.IsPortOpen("127.0.0.1", cfg.Server.APIPort) {
 			shared.Debug("no daemon reachable on localhost:%d, starting ssh tunnel", cfg.Server.APIPort)

@@ -35,10 +35,20 @@ func StartTunnel(host string, sshUser string, remotePort int, localPort int) (*T
 		return nil, fmt.Errorf("start ssh tunnel: %w", err)
 	}
 
-	time.Sleep(500 * time.Millisecond)
-
-	if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-		return nil, fmt.Errorf("ssh tunnel exited immediately")
+	start := time.Now()
+	timeout := 10 * time.Second
+	for time.Since(start) < timeout {
+		if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
+			return nil, fmt.Errorf("ssh tunnel exited immediately")
+		}
+		if IsPortOpen("127.0.0.1", localPort) {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if !IsPortOpen("127.0.0.1", localPort) {
+		cmd.Process.Kill()
+		return nil, fmt.Errorf("ssh tunnel did not become ready within %v", timeout)
 	}
 
 	return &Tunnel{
