@@ -633,8 +633,8 @@ func (h *Handler) HandleInitApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !authorizeApp(r, req.AppName) {
-		writeError(w, http.StatusForbidden, "this key is not authorized for this app")
+	if !isGlobalKey(r) {
+		writeError(w, http.StatusForbidden, "only admin (global-scoped) keys can initialize apps")
 		return
 	}
 
