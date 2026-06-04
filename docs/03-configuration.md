@@ -50,6 +50,11 @@ artifacts:
   - app
   - frontend/build/
 
+# Custom systemd ExecStart command (optional).
+# Defaults to <deploy_path>/current/<first_artifact>.
+# Set this for interpreted apps like Node.js, Python, etc.:
+# exec_start: node /opt/my-api/current/server.js
+
 # ── Server ─────────────────────────────────────────────────
 
 server:

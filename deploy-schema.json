@@ -93,6 +93,11 @@
         ["publish/"]
       ]
     },
+    "exec_start": {
+      "description": "Custom systemd ExecStart command. Defaults to <deploy_path>/current/<first_artifact>. Set for interpreted apps (Node.js, Python, etc.): 'node app/server.js'",
+      "type": "string",
+      "examples": ["node /opt/my-api/current/server.js", "python /opt/my-api/current/app.py"]
+    },
     "server": {
       "description": "Server connection information.",
       "type": "object",

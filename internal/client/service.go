@@ -10,9 +10,10 @@ import (
 )
 
 func EnsureServiceTemplate(cfg *Config) error {
-	artifact := cfg.Artifacts[0]
-
-	execPath := filepath.Join(cfg.DeployPath, "current", artifact)
+	execPath := cfg.ExecStart
+	if execPath == "" {
+		execPath = filepath.Join(cfg.DeployPath, "current", cfg.Artifacts[0])
+	}
 
 	content := fmt.Sprintf(`[Unit]
 Description=%%i - %s

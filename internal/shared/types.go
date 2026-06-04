@@ -10,6 +10,7 @@ type Config struct {
 	DeployPath   string            `yaml:"deploy_path"`
 	Build        []string          `yaml:"build"`
 	Artifacts    []string          `yaml:"artifacts"`
+	ExecStart    string            `yaml:"exec_start"`
 	Server       ServerConfig      `yaml:"server"`
 	Env          map[string]string `yaml:"env"`
 	PreDeploy    []Hook            `yaml:"pre_deploy"`

@@ -29,6 +29,10 @@ artifacts:
   - app
   - frontend/build/
 
+# Custom systemd ExecStart (optional). Defaults to <deploy_path>/current/<first_artifact>.
+# Set this for interpreted apps (Node.js, Python, etc.):
+# exec_start: node /opt/my-api/current/server.js
+
 # Server connection info
 server:
   host: my-vps                  # hostname (reads ~/.ssh/config) or IP
