@@ -126,12 +126,13 @@ type DeployRequest struct {
 }
 
 type DeployResponse struct {
-	Release       string         `json:"release"`
-	Instances     []string       `json:"instances"`
-	AppName       string         `json:"app_name"`
-	HealthResults []HealthResult `json:"health_results,omitempty"`
-	RolledBack    bool           `json:"rolled_back,omitempty"`
-	RolledBackTo  string         `json:"rolled_back_to,omitempty"`
+	Release          string         `json:"release"`
+	Instances        []string       `json:"instances"`
+	FailedInstances  []string       `json:"failed_instances,omitempty"`
+	AppName          string         `json:"app_name"`
+	HealthResults    []HealthResult `json:"health_results,omitempty"`
+	RolledBack       bool           `json:"rolled_back,omitempty"`
+	RolledBackTo     string         `json:"rolled_back_to,omitempty"`
 }
 
 type RollbackRequest struct {

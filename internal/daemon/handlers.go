@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/hamid/minideploy/internal/shared"
@@ -40,6 +41,9 @@ func (h *Handler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 
 	if req.ReleaseName == "" {
 		req.ReleaseName = GenerateReleaseName()
+	} else if err := ValidateReleaseName(req.ReleaseName); err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid release name: %v", err))
+		return
 	}
 
 	app, err := h.state.RegisterApp(&req)
@@ -56,16 +60,6 @@ func (h *Handler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 	if err := SnapshotRelease(app.DeployPath, req.ReleaseName); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("snapshot failed: %v", err))
 		return
-	}
-
-	if req.KeepReleases > 0 {
-		releases := app.Releases
-		pruned, err := PruneReleases(app.DeployPath, releases, req.KeepReleases)
-		if err == nil {
-			for _, name := range pruned {
-				h.state.DeleteRelease(app.Name, name)
-			}
-		}
 	}
 
 	previous, err := UpdateSymlink(app.DeployPath, req.ReleaseName)
@@ -109,15 +103,17 @@ func (h *Handler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if rolledBack {
+			rolledBackTo = previous
 			if previous != "" {
-				UpdateSymlink(app.DeployPath, previous)
+				if _, err := UpdateSymlink(app.DeployPath, previous); err != nil {
+					shared.Error("rollback symlink failed: %v", err)
+				}
 				pm, _ = NewProcessManager(app.ServiceType)
 				ctx2, cancel2 := context.WithTimeout(r.Context(), 30*time.Second)
 				for _, inst := range app.Instances {
 					pm.Restart(ctx2, app.ServiceName, inst.ID)
 				}
 				cancel2()
-				rolledBackTo = previous
 				h.state.SetCurrentRelease(app.Name, previous)
 			}
 		}
@@ -125,31 +121,35 @@ func (h *Handler) HandleDeploy(w http.ResponseWriter, r *http.Request) {
 
 	if !rolledBack {
 		if err := h.state.AddRelease(app.Name, release); err != nil {
-			writeError(w, http.StatusInternalServerError, fmt.Sprintf("persist state: %v", err))
-			return
+			shared.Error("persist state failed (deploy already succeeded): %v", err)
+		}
+	}
+
+	if req.KeepReleases > 0 && !rolledBack {
+		releases := app.Releases
+		pruned, err := PruneReleases(app.DeployPath, releases, req.KeepReleases)
+		if err != nil {
+			shared.Error("prune releases failed: %v", err)
+		} else {
+			for _, name := range pruned {
+				h.state.DeleteRelease(app.Name, name)
+			}
 		}
 	}
 
 	resp := shared.DeployResponse{
-		Release:       req.ReleaseName,
-		Instances:     restarted,
-		AppName:       app.Name,
-		HealthResults: healthResults,
-		RolledBack:    rolledBack,
-		RolledBackTo:  rolledBackTo,
+		Release:         req.ReleaseName,
+		Instances:       restarted,
+		FailedInstances: failed,
+		AppName:         app.Name,
+		HealthResults:   healthResults,
+		RolledBack:      rolledBack,
+		RolledBackTo:    rolledBackTo,
 	}
 
-	status := http.StatusOK
-	msg := ""
-	if len(failed) > 0 {
-		status = http.StatusOK
-		msg = fmt.Sprintf("some instances failed: %s", strings.Join(failed, ", "))
-	}
-
-	writeJSON(w, status, shared.APIEnvelope{
-		Success: len(failed) == 0,
+	writeJSON(w, http.StatusOK, shared.APIEnvelope{
+		Success: true,
 		Data:    resp,
-		Error:   msg,
 	})
 }
 
@@ -229,9 +229,11 @@ func (h *Handler) HandleStatus(w http.ResponseWriter, r *http.Request) {
 	apps := h.state.ListApps()
 
 	disk := shared.DiskUsage{}
-	// best-effort disk usage; ignore errors
-	if fs := filepath.Join("/var/lib/minideploy"); true {
-		_ = fs
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs("/var/lib/minideploy", &stat); err == nil {
+		disk.Total = int64(stat.Blocks) * int64(stat.Bsize)
+		disk.Available = int64(stat.Bavail) * int64(stat.Bsize)
+		disk.Used = disk.Total - disk.Available
 	}
 
 	writeSuccess(w, http.StatusOK, shared.StatusResponse{

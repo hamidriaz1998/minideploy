@@ -36,7 +36,7 @@ var deployCmd = &cobra.Command{
 
 		shared.Info("starting deployment for %s", cfg.AppName)
 
-		if !skipUpload && !skipBuild {
+		if !skipBuild {
 			shared.Debug("running build steps: %v", cfg.Build)
 			if err := client.RunBuildSteps(cfg.Build); err != nil {
 				shared.Fatal("%v", err)
@@ -45,7 +45,7 @@ var deployCmd = &cobra.Command{
 			if err := client.VerifyArtifacts(cfg.Artifacts); err != nil {
 				shared.Fatal("%v", err)
 			}
-		} else if skipBuild {
+		} else {
 			shared.Debug("skipping build step (--skip-build)")
 		}
 
@@ -112,11 +112,15 @@ func doDeploy(apiClient *client.APIClient, cfg *client.Config, releaseName strin
 		shared.Fatal("%v", err)
 	}
 
-	shared.Success("release %s deployed successfully", resp.Release)
-	shared.Info("instances restarted: %v", resp.Instances)
+	if len(resp.FailedInstances) > 0 {
+		shared.Warn("some instances failed to restart: %v", resp.FailedInstances)
+	}
 	if resp.RolledBack {
 		shared.Warn("health check failed, rolled back to %s", resp.RolledBackTo)
+	} else if len(resp.FailedInstances) == 0 {
+		shared.Success("release %s deployed successfully", resp.Release)
 	}
+	shared.Info("instances restarted: %v", resp.Instances)
 	if len(resp.HealthResults) > 0 {
 		for _, hr := range resp.HealthResults {
 			if hr.Passed {
@@ -137,5 +141,5 @@ func init() {
 	deployCmd.Flags().StringP("config", "c", "", "path to .deploy.yml")
 	deployCmd.Flags().StringP("release", "r", "", "custom release name (default: auto-generated)")
 	deployCmd.Flags().Bool("skip-build", false, "skip build steps and artifact verification")
-	deployCmd.Flags().Bool("skip-upload", false, "skip build and upload, deploy from existing upload/")
+	deployCmd.Flags().Bool("skip-upload", false, "skip rsync upload (deploy from existing upload/ on server)")
 }

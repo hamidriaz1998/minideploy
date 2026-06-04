@@ -46,6 +46,9 @@ type RsyncConfig struct {
 
 func RunRsync(cfg RsyncConfig) error {
 	dest := fmt.Sprintf("%s@%s:%s/upload/", cfg.SSHUser, cfg.Host, cfg.DeployDir)
+	if cfg.SSHUser == "" {
+		dest = fmt.Sprintf("%s:%s/upload/", cfg.Host, cfg.DeployDir)
+	}
 
 	args := []string{
 		"-rlvz", "--delete",

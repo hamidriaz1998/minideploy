@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/hamid/minideploy/internal/shared"
@@ -216,6 +217,25 @@ func CheckHealth(instances []shared.Instance, hc shared.HealthCheck) []shared.He
 	return results
 }
 
+func ValidateReleaseName(name string) error {
+	if len(name) == 0 {
+		return nil
+	}
+	if len(name) > 64 {
+		return fmt.Errorf("release name exceeds 64 characters")
+	}
+	for _, c := range name {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-') {
+			return fmt.Errorf("release name contains invalid character: %c", c)
+		}
+	}
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("release name must not contain '..'")
+	}
+	return nil
+}
+
 func PruneReleases(deployPath string, releases []shared.Release, keep int) ([]string, error) {
 	if keep <= 0 || len(releases) <= keep {
 		return nil, nil
@@ -229,7 +249,7 @@ func PruneReleases(deployPath string, releases []shared.Release, keep int) ([]st
 
 	var pruned []string
 	toRemove := len(sorted) - keep
-	for i := 0; i < toRemove; i++ {
+	for i := range toRemove {
 		name := sorted[i].Name
 		releaseDir := filepath.Join(deployPath, "releases", name)
 		os.RemoveAll(releaseDir)
