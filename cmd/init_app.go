@@ -77,7 +77,8 @@ The daemon SSH tunnel is managed automatically.`,
 		cmds := []string{
 			fmt.Sprintf("sudo mkdir -p %s/upload %s/releases", deployPath, deployPath),
 			fmt.Sprintf("sudo chown -R minideploy:minideploy %s", deployPath),
-			fmt.Sprintf("sudo chmod 1777 %s/upload", deployPath),
+			fmt.Sprintf("sudo chown -R minideploy:deploy %s/upload", deployPath),
+			fmt.Sprintf("sudo chmod -R 2775 %s/upload", deployPath),
 		}
 
 		shared.Info("creating app directories on %s...", host)

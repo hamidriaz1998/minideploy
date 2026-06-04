@@ -73,6 +73,9 @@ After init-server completes, run 'minideploy init-app' for each app.`,
 		stateDir := "/var/lib/minideploy"
 		preCommands := []string{
 			"id -u minideploy 2>/dev/null || sudo useradd --system --no-create-home --shell /sbin/nologin minideploy",
+			"sudo groupadd -f deploy",
+			fmt.Sprintf("sudo usermod -aG deploy minideploy"),
+			fmt.Sprintf("sudo usermod -aG deploy %s", sshUser),
 			fmt.Sprintf("sudo mkdir -p %s", stateDir),
 			fmt.Sprintf("sudo chown -R minideploy:minideploy %s", stateDir),
 		}

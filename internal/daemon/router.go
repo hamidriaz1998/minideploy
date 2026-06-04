@@ -2,7 +2,6 @@ package daemon
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 )
 
@@ -52,16 +51,7 @@ func NewRouter(state *StateManager) http.Handler {
 			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		idStr := strings.TrimPrefix(r.URL.Path, "/api/v1/keys/")
-		id, err := strconv.Atoi(idStr)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid key id")
-			return
-		}
-		r.Body = http.NoBody
-		req := struct{ ID int }{ID: id}
 		h.HandleDeleteKey(w, r)
-		_ = req
 	})
 
 	// Public endpoints (no auth)

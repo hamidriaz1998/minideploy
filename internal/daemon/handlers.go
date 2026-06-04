@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -567,18 +568,14 @@ func (h *Handler) HandleDeleteKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req shared.DeleteKeyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
-	if req.ID <= 0 {
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/v1/keys/")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
 		writeError(w, http.StatusBadRequest, "valid key id is required")
 		return
 	}
 
-	if err := h.state.DeleteAPIKey(req.ID); err != nil {
+	if err := h.state.DeleteAPIKey(id); err != nil {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("delete key: %v", err))
 		return
 	}
@@ -626,11 +623,6 @@ func (h *Handler) HandleInitApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isGlobalKey(r) {
-		writeError(w, http.StatusForbidden, "only global keys can register apps")
-		return
-	}
-
 	var req shared.InitAppRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -638,6 +630,11 @@ func (h *Handler) HandleInitApp(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.AppName == "" || req.DeployPath == "" {
 		writeError(w, http.StatusBadRequest, "app_name and deploy_path are required")
+		return
+	}
+
+	if !authorizeApp(r, req.AppName) {
+		writeError(w, http.StatusForbidden, "this key is not authorized for this app")
 		return
 	}
 
