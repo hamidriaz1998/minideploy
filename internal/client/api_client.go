@@ -232,6 +232,21 @@ func (c *APIClient) ListKeys() ([]shared.KeyInfo, error) {
 	return keys, nil
 }
 
+func (c *APIClient) InitApp(req shared.InitAppRequest) (*shared.AppState, error) {
+	env, err := c.do("POST", "/apps/init", req)
+	if err != nil {
+		return nil, err
+	}
+	if !env.Success {
+		return nil, fmt.Errorf("init app failed: %s", env.Error)
+	}
+
+	data, _ := json.Marshal(env.Data)
+	var app shared.AppState
+	json.Unmarshal(data, &app)
+	return &app, nil
+}
+
 func (c *APIClient) AppLogs(name string) (string, error) {
 	req, err := http.NewRequest("GET", c.BaseURL+"/apps/"+name+"/logs", nil)
 	if err != nil {

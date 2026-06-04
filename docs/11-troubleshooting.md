@@ -84,7 +84,7 @@ ssh root@my-vps ls -la /opt/my-app/upload/
 |---|---|
 | SSH user wrong | Check `server.ssh_user` in `.deploy.yml` |
 | rsync not installed on server | `ssh root@my-vps apt install rsync` |
-| Deploy path doesn't exist | Run `init-server` or `mkdir -p /opt/<app>/upload` |
+| Deploy path doesn't exist | Run `init-app` or `mkdir -p /opt/<app>/upload` |
 | Permission denied on write | `chown -R minideploy:minideploy /opt/<app>` |
 
 ---

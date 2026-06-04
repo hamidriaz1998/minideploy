@@ -10,7 +10,7 @@ A single-binary tool for deploying applications to a VPS with zero-downtime syml
 minideploy init-server --host my-vps --ssh-user root
 ```
 
-This cross-compiles the daemon, SCPs it to your server, creates a `minideploy` system user, installs a systemd service for the daemon, configures sudoers, and generates an API key.
+This cross-compiles the daemon, SCPs it to your server, creates a `minideploy` system user, installs a systemd service for the daemon, configures sudoers, and generates an API key. Then run `minideploy init-app` for each app.
 
 ### 2. Create a `.deploy.yml` in your project
 
@@ -123,7 +123,8 @@ This runs your build steps, rsyncs artifacts to `/opt/my-api/upload/`, and tells
 | `logs [app]` | Tail app logs |
 | `rotate-key` | Generate a new API key |
 | `init` | Generate a `.deploy.yml` interactively |
-| `init-server` | Bootstrap daemon on a fresh VPS |
+| `init-server` | Bootstrap daemon on a fresh VPS (one-time) |
+| `init-app` | Initialize app dirs + register with daemon (per app) |
 | `daemon` | Start the daemon (run as systemd service) |
 
 ## Documentation

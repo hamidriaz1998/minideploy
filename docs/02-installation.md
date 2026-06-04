@@ -53,12 +53,13 @@ The SSH user must have **passwordless sudo** access. All privileged operations (
 This will:
 
 1. Upload the current `minideploy` binary to the server
-2. Create a `minideploy` system user
-3. Create the directory structure (`/opt/<app>/upload`, `releases`, `/var/lib/minideploy`)
-4. Set up a systemd service file at `/etc/systemd/system/minideploy.service`
-5. Configure sudoers for the `minideploy` user
-6. Generate an API key and seed its hash into the daemon database
-7. Start the daemon
+2. Create a `minideploy` system user and `/var/lib/minideploy/` state directory
+3. Set up a systemd service file at `/etc/systemd/system/minideploy.service`
+4. Configure sudoers for the `minideploy` user
+5. Generate an API key and seed its hash into the daemon database
+6. Start the daemon
+
+After `init-server` completes, run `init-app` for each app you want to deploy.
 
 The admin API key is automatically saved to `~/.config/minideploy/config.yml` on your local machine.
 
@@ -84,23 +85,31 @@ Output:
     ssh_user: root
     api_key: a1b2c3d4e5f6...
 
-  Or create app-scoped keys with:
-  minideploy create-key --scope app --app-name <name>
+   Next, initialize your app with:
+   minideploy init-app
 ═══════════════════════════════════════════
 ```
 
 Save the API key in your `.deploy.yml`, `.env` file, or as an environment variable.
 For CI/CD pipelines, create an [app-scoped key](09-security.md#key-scoping) instead of using the admin key.
 
-### Adding More Apps
+### Initializing an App (after daemon is running)
 
-If the daemon is already running and you want to register another app:
+After the daemon is installed, register each app with:
 
 ```bash
-minideploy init-server --host my-vps --app-name another-app --deploy-path /opt/another-app
+minideploy init-app --app-name my-api --host my-vps
 ```
 
-This creates the directory structure and reuses the existing daemon.
+This creates the directory structure on the server, sets ownership, and registers the app with the daemon. The SSH tunnel is managed automatically.
+
+If a `.deploy.yml` file exists with `app_name`, `deploy_path`, and `server.host`, you can run:
+
+```bash
+minideploy init-app
+```
+
+See the [CLI reference](04-cli-reference.md#minideploy-init-app) for all flags.
 
 ### Manual Setup
 

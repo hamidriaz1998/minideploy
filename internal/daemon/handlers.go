@@ -618,6 +618,60 @@ func extractAppName(path, prefix, suffix string) string {
 	return trimmed[:idx]
 }
 
+func (h *Handler) HandleInitApp(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	if !isGlobalKey(r) {
+		writeError(w, http.StatusForbidden, "only global keys can register apps")
+		return
+	}
+
+	var req shared.InitAppRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.AppName == "" || req.DeployPath == "" {
+		writeError(w, http.StatusBadRequest, "app_name and deploy_path are required")
+		return
+	}
+
+	// Fill defaults for DB NOT NULL constraints. The first deploy will
+	// update these with the actual values from .deploy.yml.
+	if req.ServiceType == "" {
+		req.ServiceType = "systemd"
+	}
+	if req.ServiceName == "" {
+		req.ServiceName = req.AppName + "@%i"
+	}
+	if len(req.Instances) == 0 {
+		req.Instances = []shared.Instance{{ID: "3000", Port: 3000}}
+	}
+
+	if err := EnsureDeployDir(req.DeployPath); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	deployReq := &shared.DeployRequest{
+		AppName:     req.AppName,
+		DeployPath:  req.DeployPath,
+		ServiceType: req.ServiceType,
+		ServiceName: req.ServiceName,
+		Instances:   req.Instances,
+	}
+	app, err := h.state.RegisterApp(deployReq)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("register: %v", err))
+		return
+	}
+
+	writeSuccess(w, http.StatusCreated, app)
+}
+
 func (h *Handler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, shared.APIEnvelope{
 		Success: true,

@@ -16,6 +16,7 @@ func NewRouter(state *StateManager) http.Handler {
 	mux.HandleFunc("/api/v1/status", h.HandleStatus)
 	mux.HandleFunc("/api/v1/health", h.HandleHealth)
 	mux.HandleFunc("/api/v1/apps", h.HandleListApps)
+	mux.HandleFunc("/api/v1/apps/init", h.HandleInitApp)
 
 	mux.HandleFunc("/api/v1/apps/", func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/api/v1/apps/")

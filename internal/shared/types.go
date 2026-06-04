@@ -55,6 +55,14 @@ type APIEnvelope struct {
 	Error   string      `json:"error,omitempty"`
 }
 
+type InitAppRequest struct {
+	AppName     string     `json:"app_name"`
+	DeployPath  string     `json:"deploy_path"`
+	ServiceType string     `json:"service_type,omitempty"`
+	ServiceName string     `json:"service_name,omitempty"`
+	Instances   []Instance `json:"instances,omitempty"`
+}
+
 type CreateKeyRequest struct {
 	Scope   string `json:"scope"`
 	AppName string `json:"app_name,omitempty"`

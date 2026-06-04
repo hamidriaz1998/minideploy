@@ -14,7 +14,8 @@ minideploy is a single binary with subcommands. Use `minideploy --help` to list 
 | `releases` | List releases for an app |
 | `logs` | Fetch app logs |
 | `init` | Generate `.deploy.yml` |
-| `init-server` | Bootstrap daemon on a VPS |
+| `init-server` | Bootstrap daemon on a VPS (one-time server setup) |
+| `init-app` | Initialize app directories and register with the daemon (per app) |
 | `daemon` | Start the daemon (and subcommands: `daemon import-key`) |
 | `import-key` | Import a bcrypt key hash into the daemon database (used internally by `init-server`) |
 | `rotate-key` | Generate a new API key |
@@ -498,7 +499,7 @@ npm run build --prefix frontend
 Bootstrap the minideploy daemon on a fresh VPS.
 
 ```
-minideploy init-server [--host HOST] [--ssh-user USER] [--app-name NAME] [--deploy-path PATH] [--binary PATH] [--force]
+minideploy init-server [--host HOST] [--ssh-user USER] [--binary PATH] [--force]
 ```
 
 The SSH user must have **passwordless sudo** access — `init-server` uses `sudo` for all privileged operations (installing the binary, writing systemd units, creating users, running systemctl).
@@ -507,8 +508,8 @@ The admin API key is automatically saved to `~/.config/minideploy/config.yml` so
 you can immediately run admin commands like `create-key` without passing `--api-key`.
 
 **Auto-detection from `.deploy.yml`**: If `.deploy.yml` exists in the current directory,
-`init-server` automatically pulls `server.host`, `server.ssh_user`, `app_name`, and
-`deploy_path` from it. You can then run with zero flags:
+`init-server` automatically pulls `server.host` and `server.ssh_user` from it.
+You can then run with zero flags:
 ```
 minideploy init-server
 ```
@@ -536,8 +537,8 @@ remote, `init-server` skips the SCP and install steps (use `--force` to upload a
     ssh_user: root
     api_key: a1b2c3d4e5f6...
 
-  Or create app-scoped keys with:
-  minideploy create-key --scope app --app-name <name>
+  Next, initialize your app with:
+  minideploy init-app
 ═══════════════════════════════════════════
 ```
 
@@ -547,25 +548,78 @@ remote, `init-server` skips the SCP and install steps (use `--force` to upload a
 |---|---|---|
 | `--host` | from `.deploy.yml` | VPS hostname or IP |
 | `--ssh-user` | `root` | SSH user for initial setup |
-| `--app-name` | `my-app` | Default app name to create directories for |
-| `--deploy-path` | `/opt/<app-name>` | Deploy path on server |
 | `-b, --binary` | running binary | Path to minideploy binary to upload |
 | `--force` | `false` | Force binary upload even if already installed |
 
 By default, the running binary (`os.Executable()`) is uploaded to the server. Use `--binary /path/to/minideploy` to upload a different version.
 
 The command:
-1. Checks for `.deploy.yml` and pulls host/app-name/path/ssh-user if present
+1. Checks for `.deploy.yml` and pulls host/ssh-user if present
 2. Checks if binary already exists on the remote; skips upload if so
 3. Uploads the minideploy binary to `/usr/local/bin/minideploy`
-4. Creates the `minideploy` system user
-5. Sets up directory structure
-6. Installs a systemd service for the daemon
-7. Configures sudoers for the `minideploy` user
-8. Generates and displays an API key
-9. Seeds the bcrypt hash of the key into the daemon's SQLite database
-10. Saves the admin key to `~/.config/minideploy/config.yml`
-11. Starts the daemon
+4. Creates the `minideploy` system user and `/var/lib/minideploy/` state directory
+5. Installs a systemd service for the daemon
+6. Configures sudoers for the `minideploy` user
+7. Generates and displays an API key
+8. Seeds the bcrypt hash of the key into the daemon's SQLite database
+9. Saves the admin key to `~/.config/minideploy/config.yml`
+10. Starts the daemon
+
+After `init-server` completes, run `init-app` for each app you want to manage.
+
+## `minideploy init-app`
+
+Initialize app directories on the server and register the app with the daemon.
+
+```
+minideploy init-app [--app-name NAME] [--deploy-path PATH] [--host HOST] [--ssh-user USER] [--api-port PORT] [--api-key KEY]
+```
+
+Run this after `minideploy init-server` for each app you want to deploy. It:
+
+1. SSH into the server to create `<deploy_path>/upload/` and `<deploy_path>/releases/`
+2. Sets ownership to the `minideploy` user
+3. Makes `upload/` world-writable (`chmod 1777`) for rsync
+4. Calls the daemon API to register the app in the database (with auto-tunnel)
+
+**Auto-detection from `.deploy.yml`**: If `.deploy.yml` exists, `init-app` automatically pulls `app_name`, `deploy_path`, `server.host`, and `server.ssh_user` from it:
+
+```
+minideploy init-app
+```
+
+The API key is resolved from: `--api-key` flag → `~/.config/minideploy/config.yml` (set by `init-server`) → `MINIDEPLOY_API_KEY` env var.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--app-name` | from `.deploy.yml` | App name |
+| `--deploy-path` | `/opt/<app-name>` | Deploy path on server |
+| `--host` | from `.deploy.yml` | Daemon host (for tunnel and API) |
+| `--ssh-user` | `root` | SSH user for directory creation and tunnel |
+| `--api-port` | `8443` | Daemon API port |
+| `--api-key` | global config or env | API key for daemon auth |
+
+**Example**:
+
+```bash
+# After init-server, initialize an app:
+minideploy init-app --app-name my-api
+
+# Or with a complete config:
+minideploy init-app --app-name my-api --deploy-path /opt/my-api --host my-vps
+```
+
+**Output**:
+
+```
+═══════════════════════════════════════════
+  App "my-api" initialized!
+
+  Deploy path: /opt/my-api
+
+  Run 'minideploy deploy' to deploy your app.
+═══════════════════════════════════════════
+```
 
 ## `minideploy completion`
 

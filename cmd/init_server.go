@@ -20,46 +20,33 @@ var initServerCmd = &cobra.Command{
 1. Copy the daemon binary to the server
 2. SSH into the server to:
    - Create minideploy user
-   - Create directory structure
+   - Create state directory
    - Install the daemon binary
    - Install the daemon systemd service
    - Configure sudoers for minideploy
    - Generate API key
-   - Start the daemon`,
+   - Start the daemon
+
+After init-server completes, run 'minideploy init-app' for each app.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		host, _ := cmd.Flags().GetString("host")
 		sshUser, _ := cmd.Flags().GetString("ssh-user")
-		appName, _ := cmd.Flags().GetString("app-name")
-		deployPath, _ := cmd.Flags().GetString("deploy-path")
 		binaryPath, _ := cmd.Flags().GetString("binary")
 		forceUpload, _ := cmd.Flags().GetBool("force")
 
 		if sshUser == "" {
 			sshUser = "root"
 		}
-		if appName == "" {
-			appName = "my-app"
-		}
-		if deployPath == "" {
-			deployPath = "/opt/" + appName
-		}
 
 		// Auto-pull from .deploy.yml if present
 		if cfg, err := client.LoadConfig(".deploy.yml"); err == nil {
-			if appName == "my-app" && cfg.AppName != "" {
-				appName = cfg.AppName
-				deployPath = "/opt/" + appName
-			}
 			if host == "" && cfg.Server.Host != "" {
 				host = cfg.Server.Host
 			}
 			if sshUser == "root" && cfg.Server.SSHUser != "" {
 				sshUser = cfg.Server.SSHUser
 			}
-			if deployPath == "/opt/"+appName && cfg.DeployPath != "" {
-				deployPath = cfg.DeployPath
-			}
-			shared.Debug("auto-pulled config from .deploy.yml: host=%s, app=%s, path=%s, ssh_user=%s", host, appName, deployPath, sshUser)
+			shared.Debug("auto-pulled config from .deploy.yml: host=%s, ssh_user=%s", host, sshUser)
 		}
 
 		if host == "" {
@@ -86,12 +73,11 @@ var initServerCmd = &cobra.Command{
 		stateDir := "/var/lib/minideploy"
 		preCommands := []string{
 			"id -u minideploy 2>/dev/null || sudo useradd --system --no-create-home --shell /sbin/nologin minideploy",
-			fmt.Sprintf("sudo mkdir -p %s/upload %s/releases %s", deployPath, deployPath, stateDir),
-			fmt.Sprintf("sudo chown -R minideploy:minideploy %s %s", deployPath, stateDir),
-			fmt.Sprintf("sudo chmod 1777 %s/upload", deployPath),
+			fmt.Sprintf("sudo mkdir -p %s", stateDir),
+			fmt.Sprintf("sudo chown -R minideploy:minideploy %s", stateDir),
 		}
 
-		shared.Info("setting up directories and user...")
+		shared.Info("setting up daemon user and state directory...")
 		for _, cmdStr := range preCommands {
 			shared.Debug("running: %s", cmdStr)
 			ssh := exec.Command("ssh", fmt.Sprintf("%s@%s", sshUser, host), cmdStr)
@@ -241,8 +227,8 @@ minideploy ALL=(root) NOPASSWD: /usr/sbin/useradd *
 		fmt.Printf("    ssh_user: %s\n", sshUser)
 		fmt.Printf("    api_key: %s\n", rawKey)
 		fmt.Println()
-		fmt.Println("  Or create app-scoped keys with:")
-		fmt.Println("  minideploy create-key --scope app --app-name <name>")
+		fmt.Println("  Next, initialize your app with:")
+		fmt.Println("  minideploy init-app")
 		fmt.Println("═══════════════════════════════════════════")
 	},
 }
@@ -251,8 +237,6 @@ func init() {
 	rootCmd.AddCommand(initServerCmd)
 	initServerCmd.Flags().String("host", "", "VPS hostname or IP (default: from .deploy.yml)")
 	initServerCmd.Flags().String("ssh-user", "root", "SSH user for initial setup")
-	initServerCmd.Flags().String("app-name", "my-app", "Default app name")
-	initServerCmd.Flags().String("deploy-path", "", "Deploy path on server (default: /opt/<app-name>)")
 	initServerCmd.Flags().StringP("binary", "b", "", "Path to minideploy binary to upload (default: the running binary)")
 	initServerCmd.Flags().Bool("force", false, "Force binary upload even if already installed")
 }
